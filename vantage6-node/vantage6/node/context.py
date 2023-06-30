@@ -1,5 +1,9 @@
 from pathlib import Path
 
+# experimental: node discovers its own container name by using its hostname
+import socket
+import docker
+
 from vantage6.common.globals import (
     PACKAGE_FOLDER,
     APPNAME
@@ -49,6 +53,28 @@ class DockerNodeContext(NodeContext):
             "config": mnt / "config",
             "vpn": mnt / "vpn"
         }
+
+    # experimental: node will later on use its container name to connect itself
+    # to the algorithm network, but the container name can be arbitrarily set by
+    # docker compose for instance. So we shouldn't assume a fixed name as
+    # NodeContext's `docker_container_name()` does.
+    # TODO: Does this break regular `vnode start`?
+    @property
+    def docker_container_name(self) -> str:
+        """
+        Docker container name of the node.
+
+        Returns
+        -------
+        str
+            Node's Docker container name
+        """
+
+        hostname = socket.gethostname()
+        docker_client = docker.from_env()
+        container = docker_client.containers.get(hostname)
+
+        return container.name
 
 
 class TestingConfigurationManager(ConfigurationManager):
