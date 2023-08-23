@@ -142,6 +142,26 @@ class NetworkManager(object):
             container_name, aliases=aliases, ipv4_address=ipv4
         )
 
+    def is_connected(self, container_name: str) -> bool:
+        """
+        Whether or not a container is connected to the network
+
+        Parameters
+        ----------
+        container_name: str
+            Name of the container to check
+
+        Returns
+        -------
+        bool
+            Whether or not the container is connected to the network
+        """
+        for container in self.network.containers:
+            if container.name == container_name:
+                return True
+
+        return False
+
     def disconnect(self, container_name: str) -> None:
         """
         Disconnect a container from the network.

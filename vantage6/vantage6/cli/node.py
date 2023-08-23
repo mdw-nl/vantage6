@@ -47,6 +47,7 @@ from vantage6.common.encryption import RSACryptor
 from vantage6.client import Client
 
 from vantage6.cli.context import NodeContext
+from vantage6.node.context import DockerNodeContext
 from vantage6.cli.globals import (
     DEFAULT_NODE_ENVIRONMENT as N_ENV,
     DEFAULT_NODE_SYSTEM_FOLDERS as N_FOL
@@ -319,11 +320,13 @@ def cli_node_start(name: str, config: str, environment: str,
     # check if config name is allowed docker name, else exit
     check_config_name_allowed(ctx.name)
 
+    # DOCKERIZED: SKIP: we are not in the server/nodes orquestration business
     # check that this node is not already running
     running_nodes = docker_client.containers.list(
         filters={"label": f"{APPNAME}-type=node"}
     )
 
+    # DOCKERIZED: SKIP: we are not in the server/nodes orquestration business
     suffix = "system" if system_folders else "user"
     for node in running_nodes:
         if node.name == f"{APPNAME}-{name}-{suffix}":
@@ -331,15 +334,16 @@ def cli_node_start(name: str, config: str, environment: str,
             exit(1)
 
     # make sure the (host)-task and -log dir exists
+    # DOCKERIZED: Check that dirs exists. If the are not volume maps, warn that it's on the rw of the container that will be removed when container dies
     info("Checking that data and log dirs exist")
     ctx.data_dir.mkdir(parents=True, exist_ok=True)
     ctx.log_dir.mkdir(parents=True, exist_ok=True)
 
+    # DOCKERIZED: SKIP: { The image is the one running this code already!
     # Determine image-name. First we check if the option --image has been used.
     # Then we check if the image has been specified in the config file, and
     # finally we use the default settings from the package.
     if not image:
-
         # FIXME: remove me in version 4+, as this is to support older
         # configuration files. So the outer `image` key is no longer supported
         if ctx.config.get('image'):
@@ -363,6 +367,8 @@ def cli_node_start(name: str, config: str, environment: str,
         warning(f"     {e}")
     else:
         info(" ... success!")
+    # DOCKERIZED: SKIP: }
+    #
 
     info("Creating Docker data volume")
 
@@ -372,15 +378,17 @@ def cli_node_start(name: str, config: str, environment: str,
     squid_volume = docker_client.volumes.create(ctx.docker_squid_volume_name)
 
     info("Creating file & folder mounts")
-    # FIXME: should obtain mount points from DockerNodeContext
+    # FIXME: instance_folders() parameters are not being used
+    docker_node_dirs = DockerNodeContext.instance_folders(None, None, None)
+
     mounts = [
         # (target, source)
-        ("/mnt/log", str(ctx.log_dir)),
-        ("/mnt/data", data_volume.name),
-        ("/mnt/vpn", vpn_volume.name),
-        ("/mnt/ssh", ssh_volume.name),
-        ("/mnt/squid", squid_volume.name),
-        ("/mnt/config", str(ctx.config_dir)),
+        (docker_node_dirs["log"], str(ctx.log_dir)),
+        (docker_node_dirs["data"], data_volume.name),
+        (docker_node_dirs["vpn"], vpn_volume.name),
+        (docker_node_dirs["ssh"], ssh_volume.name),
+        (docker_node_dirs["squid"], squid_volume.name),
+        (docker_node_dirs["config"], str(ctx.config_dir)),
         ("/var/run/docker.sock", "/var/run/docker.sock"),
     ]
 

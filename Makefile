@@ -144,6 +144,51 @@ image:
 		-f ./docker/node-and-server.Dockerfile \
 		--push .
 
+# Draft: dockerized images.
+#        * For now, only building for amd64 with default builder as that seems
+#        quicker (during development) than dealing with a 'docker-container'
+#        builder
+#        * nofile limit is set in case container where this is built has a very
+#        high nofile limit. On which pyhton 2.7's Popen() will get stuck, as it tries to
+#        close all file descriptors...
+dockerized: dockerized-server dockerized-node
+
+dockerized-base-image:
+	@echo "Building ${REGISTRY}/infrastructure/dockerized-infrastructure-base:${TAG}"
+	@echo "Building ${REGISTRY}/infrastructure/dockerized-infrastructure-base:latest"
+	docker buildx build \
+		--tag ${REGISTRY}/infrastructure/dockerized-infrastructure-base:${TAG} \
+		--tag ${REGISTRY}/infrastructure/dockerized-infrastructure-base:latest \
+		--tag ${REGISTRY}/infrastructure/dockerized-infrastructure-base:${BASE} \
+		--platform linux/amd64 \
+		--ulimit nofile=262144:262144 \
+		--load \
+		-f ./docker/dockerized-infrastructure-base.Dockerfile .
+
+dockerized-server: dockerized-base-image
+	@echo "Building ${REGISTRY}/infrastructure/dockerized-server:${TAG}"
+	docker buildx build \
+		--tag ${REGISTRY}/infrastructure/dockerized-server:${TAG} \
+		--tag ${REGISTRY}/infrastructure/dockerized-server:latest \
+		--build-arg TAG=${TAG} \
+		--build-arg BASE=${BASE} \
+		--platform linux/amd64 \
+		--ulimit nofile=262144:262144 \
+		--load \
+		-f ./docker/dockerized-server.Dockerfile .
+
+dockerized-node: dockerized-base-image
+	@echo "Building ${REGISTRY}/infrastructure/dockerized-node:${TAG}"
+	docker buildx build \
+		--tag ${REGISTRY}/infrastructure/dockerized-node:${TAG} \
+		--tag ${REGISTRY}/infrastructure/dockerized-node:latest \
+		--build-arg TAG=${TAG} \
+		--build-arg BASE=${BASE} \
+		--platform linux/amd64 \
+		--ulimit nofile=262144:262144 \
+		--load \
+		-f ./docker/dockerized-node.Dockerfile .
+
 rebuild:
 	@echo "------------------------------------"
 	@echo "         BUILDING PROJECT           "

@@ -622,13 +622,23 @@ class ServerApp:
             # TODO use constant instead of 'Root' literal
             root = db.Role.get_by_name("Root")
 
-            log.warn(f"Creating root user: "
-                     f"username={SUPER_USER_INFO['username']}, "
-                     f"password={SUPER_USER_INFO['password']}")
+            # read initial root password from file (docker secret) if provided
+            # TODO: This is a workaround so we don't have an insecure vserver at
+            # the start and we can set up a developent password. Ideally, we
+            # would provide an already hashed password. But as hashing is
+            # implemented via @validate on the field 'password', there isn't a
+            # nice quick way around this.
+            if os.environ.get('V6_INITIAL_ROOT_PASSWORD_FILE'):
+                with open(os.environ.get('V6_INITIAL_ROOT_PASSWORD_FILE')) as password_file:
+                    initial_root_password = password_file.read().strip()
+                log.info(f"Creating root user with password provided via V6_INITIAL_ROOT_PASSWORD_FILE")
+            else:
+                initial_root_password = SUPER_USER_INFO['password']
+                log.warn(f"Creating root user with default credentials!")
 
             user = db.User(username=SUPER_USER_INFO['username'], roles=[root],
                            organization=org, email="root@domain.ext",
-                           password=SUPER_USER_INFO['password'],
+                           password=initial_root_password,
                            failed_login_attempts=0,
                            last_login_attempt=None)
             user.save()

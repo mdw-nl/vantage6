@@ -455,7 +455,7 @@ class DockerManager(DockerBaseManager):
         )
         database = database if (database and len(database)) else 'default'
 
-        # attempt to kick of the task. If it fails do to unknown reasons we try
+        # attempt to kick off the task. If it fails due to unknown reasons we try
         # again. If it fails permanently we add it to the failed tasks to be
         # handled by the speaking worker of the node
         attempts = 1

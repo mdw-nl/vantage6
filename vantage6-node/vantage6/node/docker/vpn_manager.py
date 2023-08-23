@@ -55,7 +55,7 @@ class VPNManager(DockerBaseManager):
         """
         super().__init__(isolated_network_mgr)
 
-        self.vpn_client_container_name = f'{APPNAME}-{node_name}-vpn-client'
+        self.vpn_client_container_name = f'{node_name}-vpn-client'
         self.vpn_volume_name = vpn_volume_name
         self.client = node_client
         self.subnet = vpn_subnet

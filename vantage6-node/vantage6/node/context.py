@@ -24,6 +24,7 @@ class DockerNodeContext(NodeContext):
         """Display node version number."""
         super().__init__(*args, **kwargs)
         self.log.info(f"Node package version '{__version__}'")
+        self.name = self.docker_container_name
 
     def set_folders(self, instance_type, instance_name, system_folders):
         """ In case of the dockerized version we do not want to use user
@@ -51,7 +52,9 @@ class DockerNodeContext(NodeContext):
             "log": mnt / "log",
             "data": mnt / "data",
             "config": mnt / "config",
-            "vpn": mnt / "vpn"
+            "vpn": mnt / "vpn",
+            "squid:": mnt / "squid",
+            "ssh": mnt / "ssh"
         }
 
     # experimental: node will later on use its container name to connect itself
@@ -62,7 +65,7 @@ class DockerNodeContext(NodeContext):
     @property
     def docker_container_name(self) -> str:
         """
-        Docker container name of the node.
+        Docker container name of the node. Unique under the same docker host.
 
         Returns
         -------
@@ -74,7 +77,39 @@ class DockerNodeContext(NodeContext):
         docker_client = docker.from_env()
         container = docker_client.containers.get(hostname)
 
-        return container.name
+        return f"{container.name}"
+
+    @property
+    def docker_network_name(self) -> str:
+        """
+        Private Docker network name for this node, should be unique. Based on
+        docker_container_name.
+
+        Returns
+        -------
+        str
+            Docker network name
+        """
+        return f"{self.docker_container_name}-net"
+
+    def docker_temporary_volume_name(self, run_id: int) -> str:
+        """
+        Docker volume in which temporary data is stored. Temporary data is
+        linked to a specific run. Multiple algorithm containers can have the
+        same run id, and therefore the share same temporary volume.
+
+        Parameters
+        ----------
+        run_id : int
+            run id provided by the server
+
+        Returns
+        -------
+        str
+            Docker volume name
+        """
+        return f"{self.docker_container_name}-tmpvol-{run_id}"
+
 
 
 class TestingConfigurationManager(ConfigurationManager):

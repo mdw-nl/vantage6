@@ -239,7 +239,7 @@ def proxy_task():
         Returns
         -------
         dict
-            Modified organization dictionary in which the `input` key is
+            Modified organization dictionary in which the `input` key
             contains encrypted input
         """
         input_ = organization.get("input", {})

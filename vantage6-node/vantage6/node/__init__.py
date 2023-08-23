@@ -171,10 +171,12 @@ class Node:
         # Connect the node to the isolated algorithm network *only* if we're
         # running in a docker container.
         if self.ctx.running_in_docker:
-            isolated_network_mgr.connect(
-                container_name=self.ctx.docker_container_name,
-                aliases=[NODE_PROXY_SERVER_HOSTNAME]
-            )
+            # node container might be 'restart'ed. Reconnecting would raise exception
+            if not isolated_network_mgr.is_connected(self.ctx.docker_container_name):
+                isolated_network_mgr.connect(
+                    container_name=self.ctx.docker_container_name,
+                    aliases=[NODE_PROXY_SERVER_HOSTNAME]
+                )
 
         # Connect any docker services specified in the configuration file to
         # the node container
@@ -787,7 +789,7 @@ class Node:
 
         vpn_manager = VPNManager(
             isolated_network_mgr=isolated_network_mgr,
-            node_name=self.ctx.name,
+            node_name=self.ctx.docker_container_name,
             node_client=self.client,
             vpn_volume_name=vpn_volume_name,
             vpn_subnet=self.config.get('vpn_subnet'),
