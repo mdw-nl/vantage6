@@ -13,20 +13,14 @@ readonly V6_NODE_DIR_LOG=${V6_NODE_DIR_LOG:-"/mnt/log"}
 readonly V6_NODE_DIR_VPN=${V6_NODE_DIR_VPN:-"/mnt/vpn"}
 readonly V6_NODE_DIR_SSH=${V6_NODE_DIR_SSH:-"/mnt/ssh"}
 readonly V6_NODE_DIR_SQUID=${V6_NODE_DIR_SQUID:-"/mnt/squid"}
-# we export so template_config.py can read them
-export V6_NODE_DIR_DATA
 
 source /vantage6/docker/common/lib.sh
 
-# default values
-readonly DEFAULT_CONFIG_PATH="/mnt/config/config.yaml"
-readonly DEFAULT_TEMPLATE_PATH="/mnt/config/config.yaml.j2"
 readonly MINIMAL_CONFIG_TEMPLATE_PATH="/vantage6/docker/node/minimal_config.yaml.j2"
 
-# global vars
-V6_CONFIG_TEMPLATE_PATH=${V6_CONFIG_TEMPLATE_PATH:-$DEFAULT_TEMPLATE_PATH}
-V6_CONFIG_PATH=${V6_CONFIG_PATH:-$DEFAULT_CONFIG_PATH}
-
+# we export so template config code can read them
+export MINIMAL_CONFIG_TEMPLATE_PATH
+export V6_NODE_DIR_DATA
 
 
 # Different ways of configure a node:

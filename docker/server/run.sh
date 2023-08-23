@@ -4,13 +4,8 @@ set -euo pipefail
 
 source /vantage6/docker/common/lib.sh
 
-# default values
-readonly DEFAULT_CONFIG_PATH="/mnt/config/config.yaml"
-readonly DEFAULT_TEMPLATE_PATH="/vantage6/docker/server/minimal_config.yaml.j2"
-
-# global vars
-V6_TEMPLATE_PATH=${V6_TEMPLATE_PATH:-$DEFAULT_TEMPLATE_PATH}
-V6_CONFIG_PATH=${V6_CONFIG_PATH:-$DEFAULT_CONFIG_PATH}
+readonly MINIMAL_CONFIG_TEMPLATE_PATH="/vantage6/docker/server/minimal_config.yaml.j2"
+export MINIMAL_CONFIG_TEMPLATE_PATH
 
 # Starts the server, runs it in the foreground
 #

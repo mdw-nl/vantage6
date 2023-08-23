@@ -8,6 +8,15 @@ readonly COMMON_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
 # fixed path to pre-hook script
 readonly PRE_HOOK_PATH="/custom-start.d/pre_run.sh"
 
+# default values
+readonly DEFAULT_CONFIG_PATH="/mnt/config/config.yaml"
+readonly DEFAULT_TEMPLATE_PATH="/mnt/config/config.yaml.j2"
+
+# global vars
+V6_CONFIG_TEMPLATE_PATH=${V6_CONFIG_TEMPLATE_PATH:-$DEFAULT_TEMPLATE_PATH}
+V6_CONFIG_PATH=${V6_CONFIG_PATH:-$DEFAULT_CONFIG_PATH}
+
+
 # Queries vantage6 server API (/version) every 5 seconds until it responds
 # or times out (after 5 attempts with a 4 second timeout).
 #
@@ -47,9 +56,12 @@ PYTHONCODE
 # Wrapper around template_config()
 #
 # In:
+#   External env vars:
+#   - MINIMAL_CONFIG_TEMPLATE_PATH: path to minimal template config file which will be used if no other template is found.
+#   Env vars defined in this file:
 #   - V6_CONFIG_PATH: path to config file. If defined, this funcion won't do anything.
 #   - V6_CONFIG_TEMPLATE_PATH: path to template config file.
-#   - MINIMAL_CONFIG_TEMPLATE_PATH: path to minimal template config file which will be used if no other template is found.
+#   Arguments:
 #   - $@: extra arguments to pass to template_config()
 template_config_from_env() {
     # if config file exists, use it. If not, resort to config template, if not, use minimal config template.
