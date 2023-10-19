@@ -1241,6 +1241,21 @@ class UserClient(ClientBase):
                 # str, in that case we convert it to a list
                 databases = [{'label': databases}]
 
+            for db in databases:
+                label_input = db.get('label')
+                if not label_input or not isinstance(label_input, str):
+                    raise ValueError(
+                        "Each database should have a 'label' key with a string value."
+                    )
+                # Labels will become part of env var names in algo container,
+                # some chars are not allowed in some shells.
+                if not label_input.isidentifier():
+                    raise ValueError(
+                        "Database labels should be made up of letters, digits (except"
+                        " first character) and underscores only. "
+                        f"Invalid label: {db.get('label')}"
+                    )
+
             # Data will be serialized in JSON.
             serialized_input = serialize(input_)
 
