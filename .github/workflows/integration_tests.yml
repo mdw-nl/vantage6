@@ -2,7 +2,6 @@ name: Integration tests
 
 on:
   workflow_dispatch:
-  push:
 
 jobs:
   integration-test:
@@ -20,6 +19,14 @@ jobs:
         # the requirements from the repository root
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         make install-dev
+    - name: Prepare Environment
+      run: |
+        mkdir -p ~/.config/vantage6/node
+        mkdir -p ~/.cache/vantage6/log/node/
+        sudo mkdir -p /etc/vantage6/server
+        sudo chmod -R 777 /etc/vantage6
+        sudo mkdir -p /usr/local/share/vantage6
+        sudo chmod -R 777 /usr/local/share/vantage6
     - name: Integration Test Diagnostics
       run: |
         v6 test integration-test --server-url http://172.17.0.1 --name integration-test --keep 1 --stop 0
