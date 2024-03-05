@@ -2,7 +2,8 @@ import subprocess
 import itertools
 from shutil import rmtree
 from pathlib import Path
-
+import logging
+import logging.handlers
 import click
 
 from vantage6.common import info
@@ -49,9 +50,10 @@ def remove_demo_network(click_ctx: click.Context, ctx: ServerContext) -> None:
         config.name for config in configs if f"{ctx.name}_node_" in config.name
     ]
     for name in node_names:
-        node_ctx = NodeContext(name, False)
+        module_name = __name__.split(".")[-1]
+        log = logging.getLogger(module_name)
         for handler in itertools.chain(
-            node_ctx.log.handlers, node_ctx.log.root.handlers
+            log.handlers, log.root.handlers
         ):
             handler.close()
         subprocess.run(["v6", "node", "remove", "-n", name, "--user", "--force"])

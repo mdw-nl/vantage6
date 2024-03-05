@@ -1,6 +1,7 @@
 from pathlib import Path
 import click
-
+import json
+from vantage6.cli.context import NodeContext
 from vantage6.cli.utils import info
 from vantage6.cli.dev.create import create_demo_network
 from vantage6.cli.dev.start import start_demo_network
@@ -23,6 +24,12 @@ from vantage6.cli.test.feature_tester import cli_test_features
 )
 @click.option(
     "-i", "--image", type=str, default=None, help="Server Docker image to use"
+)
+@click.option(
+    "--stop",
+    type=bool,
+    default=True,
+    help="Keep the dev network running after finishing the test",
 )
 @click.option(
     "--keep",
@@ -52,6 +59,7 @@ def cli_test_integration(
     server_url: str,
     image: str,
     keep: bool = False,
+    stop: bool = True,
     extra_server_config: Path = None,
     extra_node_config: Path = None,
 ) -> list[dict]:
@@ -109,8 +117,10 @@ def cli_test_integration(
         no_vpn=True,
     )
 
+    NodeContext.LOGGING_ENABLED = False
     # clean up the test resources
-    click_ctx.invoke(stop_demo_network, name=name, system_folders=True)
+    if stop or not keep:
+        click_ctx.invoke(stop_demo_network, name=name, system_folders=True)
     if not keep:
         click_ctx.invoke(remove_demo_network, name=name, system_folders=True)
     else:
@@ -119,4 +129,12 @@ def cli_test_integration(
             "start-demo-network`"
         )
 
+    results_json = json.loads(diagnose_results[0]["result"])
+    for test_results in results_json:
+        if not test_results["success"]:
+            raise SystemExit(test_results["name"] + " failed")
+
     return diagnose_results
+
+if __name__ == '__main__':
+    cli_test_integration(['--server-url', 'http://172.17.0.1','--name','integration-test'])
