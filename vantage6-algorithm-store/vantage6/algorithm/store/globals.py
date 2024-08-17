@@ -1,4 +1,5 @@
 # from pathlib import Path
+import os
 
 from vantage6.common.globals import APPNAME
 
@@ -11,7 +12,7 @@ from vantage6.common.globals import APPNAME
 SERVER_MODULE_NAME = APPNAME + "-algorithm-store"
 
 # URL extension for the API endpoints
-API_PATH = "/api"
+API_PATH = os.environ.get("API_PATH", "/api")
 
 # TODO: this should be done differently
 # Which resources should be initialized. These names correspond to the
