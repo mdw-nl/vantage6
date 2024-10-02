@@ -3,8 +3,9 @@ import logging
 import os
 import inspect as class_inspect
 from typing import Any
+from time import sleep
 from flask.globals import g
-
+from sqlalchemy.exc import OperationalError
 from sqlalchemy import Column, Integer, inspect, Table, exists
 from sqlalchemy.orm.session import Session
 from sqlalchemy.ext.declarative import declared_attr, DeclarativeMeta
@@ -87,6 +88,9 @@ class BaseDatabase:
         """
         self.allow_drop_all = allow_drop_all
         self.URI = uri
+        # Number of attempts and delay in second for the db connection
+        MAX_ATTEMPT = 10
+        RETRY_DELAY = 30  # seconds
 
         URL = make_url(uri)
         log.info("Initializing the database")
@@ -99,31 +103,46 @@ class BaseDatabase:
         # Make sure that the director for the file database exists.
         if URL.host is None and URL.database:
             os.makedirs(os.path.dirname(URL.database), exist_ok=True)
+        # Try connecting to the Db MAX_ATTEMPT times if not error occur
+        for attempt in range(MAX_ATTEMPT):
+            try:
+                self.engine = create_engine(uri, pool_pre_ping=True)
+                # we can call Session() to create a session, if a session already
+                # exists it will return the same session (!). implicit access to the
+                # Session (without calling it first). The scoped session is scoped to
+                # the local thread the process is running in.
+                self.session_a = scoped_session(sessionmaker(autocommit=False, autoflush=False))
+                self.session_a.configure(bind=self.engine)
 
-        self.engine = create_engine(uri, pool_pre_ping=True)
 
-        # we can call Session() to create a session, if a session already
-        # exists it will return the same session (!). implicit access to the
-        # Session (without calling it first). The scoped session is scoped to
-        # the local thread the process is running in.
-        self.session_a = scoped_session(sessionmaker(autocommit=False, autoflush=False))
-        self.session_a.configure(bind=self.engine)
+                # TODO BvB 7/2/2024 I think this session is not necessary as algorithm
+                # store does not use iPython shell
+                # because the Session factory returns the same session (if one exists
+                # already) we need a second factory to create an alternative session.
+                # this is required if we use both the flask session and the iPython.
+                # Because the flask session is managed by the hooks `pre_request` and
+                # `post request`. If we would use the same session for other tasks, the
+                # session can be terminated unexpectedly.
+                self.session_b = scoped_session(sessionmaker(autocommit=False, autoflush=False))
+                self.session_b.configure(bind=self.engine)
 
-        # TODO BvB 7/2/2024 I think this session is not necessary as algorithm
-        # store does not use iPython shell
-        # because the Session factory returns the same session (if one exists
-        # already) we need a second factory to create an alternative session.
-        # this is required if we use both the flask session and the iPython.
-        # Because the flask session is managed by the hooks `pre_request` and
-        # `post request`. If we would use the same session for other tasks, the
-        # session can be terminated unexpectedly.
-        self.session_b = scoped_session(sessionmaker(autocommit=False, autoflush=False))
-        self.session_b.configure(bind=self.engine)
 
-        # short hand to obtain a object-session.
-        self.object_session = Session.object_session
+                # short hand to obtain a object-session.
+                self.object_session = Session.object_session
 
-        base.metadata.create_all(bind=self.engine)
+                base.metadata.create_all(bind=self.engine)
+                break
+            except OperationalError as e:
+                log.error(f"Connection attempt failed: {str(e)}")
+
+                # Check if the maximum retry duration has been exceeded
+                if attempt < MAX_ATTEMPT - 1:
+                    log.info(f"Retrying in {RETRY_DELAY} seconds...")
+                    sleep(RETRY_DELAY)
+                else:
+                    raise Exception(
+                        "Unable to connect to the database after 5 minutes of attempts. Please ensure the database is up and running.") from e
+
         log.info("Database initialized!")
 
         # add columns that are not yet in the database (they may have been
