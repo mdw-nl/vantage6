@@ -91,7 +91,9 @@ class BaseDatabase:
 
         MAX_NUMBER_OF_ATTEMPTS = 10
         RETRY_DELAY_IN_SECONDS = 30
-        MAX_TIME_IN_MINUTES = int((MAX_NUMBER_OF_ATTEMPTS*RETRY_DELAY_IN_SECONDS)/60)
+        MAX_TIME_IN_MINUTES = int(
+            (MAX_NUMBER_OF_ATTEMPTS * RETRY_DELAY_IN_SECONDS) / 60
+        )
 
         URL = make_url(uri)
         log.info("Initializing the database")
