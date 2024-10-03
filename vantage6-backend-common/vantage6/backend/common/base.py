@@ -88,9 +88,10 @@ class BaseDatabase:
         """
         self.allow_drop_all = allow_drop_all
         self.URI = uri
-        # Number of attempts and delay in second for the db connection
-        MAX_ATTEMPT = 10
-        RETRY_DELAY = 30  # seconds
+
+        MAX_NUMBER_OF_ATTEMPTS = 10
+        RETRY_DELAY_IN_SECONDS = 30
+        MAX_TIME_IN_MINUTES = int((MAX_NUMBER_OF_ATTEMPTS*RETRY_DELAY_IN_SECONDS)/60)
 
         URL = make_url(uri)
         log.info("Initializing the database")
@@ -104,7 +105,7 @@ class BaseDatabase:
         if URL.host is None and URL.database:
             os.makedirs(os.path.dirname(URL.database), exist_ok=True)
         # Try connecting to the Db MAX_ATTEMPT times if not error occur
-        for attempt in range(MAX_ATTEMPT):
+        for attempt in range(MAX_NUMBER_OF_ATTEMPTS):
             try:
                 self.engine = create_engine(uri, pool_pre_ping=True)
                 # we can call Session() to create a session, if a session already
@@ -138,12 +139,12 @@ class BaseDatabase:
                 log.error(f"Connection attempt failed: {str(e)}")
 
                 # Check if the maximum retry duration has been exceeded
-                if attempt < MAX_ATTEMPT - 1:
-                    log.info(f"Retrying in {RETRY_DELAY} seconds...")
-                    sleep(RETRY_DELAY)
+                if attempt < MAX_NUMBER_OF_ATTEMPTS - 1:
+                    log.info(f"Retrying in {RETRY_DELAY_IN_SECONDS} seconds...")
+                    sleep(RETRY_DELAY_IN_SECONDS)
                 else:
                     raise Exception(
-                        "Unable to connect to the database after 5 minutes of attempts. Please ensure the database is up and running."
+                        f"Unable to connect to the database after {MAX_TIME_IN_MINUTES} minutes of attempts. Please ensure the database is up and running."
                     ) from e
 
         log.info("Database initialized!")
