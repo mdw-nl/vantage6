@@ -14,7 +14,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import scoped_session, sessionmaker, RelationshipProperty
 from sqlalchemy.orm.exc import NoResultFound
-
+from vantage6.backend.common.globals import (
+    MAX_NUMBER_OF_ATTEMPTS,
+    RETRY_DELAY_IN_SECONDS,
+)
 from vantage6.common import logger_name
 from vantage6.backend.common import session
 
@@ -89,9 +92,7 @@ class BaseDatabase:
         self.allow_drop_all = allow_drop_all
         self.URI = uri
 
-        MAX_NUMBER_OF_ATTEMPTS = 10
-        RETRY_DELAY_IN_SECONDS = 30
-        MAX_TIME_IN_MINUTES = int(
+        max_time_in_minutes = int(
             (MAX_NUMBER_OF_ATTEMPTS * RETRY_DELAY_IN_SECONDS) / 60
         )
 
@@ -146,7 +147,7 @@ class BaseDatabase:
                     sleep(RETRY_DELAY_IN_SECONDS)
                 else:
                     raise Exception(
-                        f"Unable to connect to the database after {MAX_TIME_IN_MINUTES} minutes of attempts. Please ensure the database is up and running."
+                        f"Unable to connect to the database after {max_time_in_minutes} minutes of attempts. Please ensure the database is up and running."
                     ) from e
 
         log.info("Database initialized!")
