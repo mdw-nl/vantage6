@@ -19,7 +19,7 @@ from vantage6.backend.common.globals import (
     RETRY_DELAY_IN_SECONDS,
 )
 from vantage6.common import logger_name
-from vantage6.backend.common import session
+from vantage6.server.globals import session
 
 
 module_name = logger_name(__name__)
