@@ -10,7 +10,7 @@ APPNAME = "vantage6"
 
 MAIN_VERSION_NAME = "cotopaxi"
 
-DEFAULT_DOCKER_REGISTRY = "harbor2.vantage6.ai"
+DEFAULT_DOCKER_REGISTRY = "ghcr.io/mdw-nl"
 
 DEFAULT_NODE_IMAGE = f"infrastructure/node:{MAIN_VERSION_NAME}"
 
@@ -38,7 +38,7 @@ PING_INTERVAL_SECONDS = 60
 NODE_CLIENT_REFRESH_BEFORE_EXPIRES_SECONDS = 600
 
 # The basics image can be used (mainly by the UI) to collect column names
-BASIC_PROCESSING_IMAGE = "harbor2.vantage6.ai/algorithms/basics"
+BASIC_PROCESSING_IMAGE = "ghcr.io/mdw-nl/algorithms/basics"
 
 # Character to replace '=' with in encoded environment variables
 ENV_VAR_EQUALS_REPLACEMENT = "!"

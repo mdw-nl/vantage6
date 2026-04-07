@@ -2,11 +2,11 @@
 #
 # IMAGE
 # -----
-# * harbor2.vantage6.ai/infrastructure/algorithm-store:x.x.x
+# * ghcr.io/mdw-nl/infrastructure/algorithm-store:x.x.x
 #
 ARG TAG=latest
 ARG BASE=4.13
-FROM harbor2.vantage6.ai/infrastructure/infrastructure-base:${BASE}
+FROM ghcr.io/mdw-nl/infrastructure/infrastructure-base:${BASE}
 
 LABEL version=${TAG}
 LABEL maintainer="Frank Martin <f.martin@iknl.nl>; Bart van Beusekom <b.vanbeusekom@iknl.nl>"
