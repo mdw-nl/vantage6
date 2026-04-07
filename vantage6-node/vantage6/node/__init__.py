@@ -24,6 +24,7 @@ see if there are new tasks available.
 
 import sys
 import os
+import importlib
 import random
 import time
 import datetime
@@ -33,7 +34,6 @@ import json
 import shutil
 import requests.exceptions
 import psutil
-import pynvml
 
 from pathlib import Path
 from threading import Thread
@@ -262,6 +262,14 @@ class Node:
         dict
             Dictionary containing GPU-related metrics.
         """
+        try:
+            pynvml = importlib.import_module("pynvml")
+        except ModuleNotFoundError as exc:
+            self.gpu_metadata_available = False
+            raise RuntimeError(
+                "GPU metadata requires the optional 'nvidia-ml-py' package. "
+                "Install it if you want this feature."
+            ) from exc
 
         try:
             pynvml.nvmlInit()
