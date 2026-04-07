@@ -91,7 +91,8 @@ class VPNManager(DockerBaseManager):
             else network_config_image
         )
 
-        self._update_images()
+        if self.subnet:
+            self._update_images()
 
         self.log.debug("Used VPN images:")
         self.log.debug(f"  Alpine: {self.alpine_image}")

@@ -3,7 +3,7 @@
 
 # docker image tag
 TAG ?= cotopaxi
-REGISTRY ?= harbor2.vantage6.ai
+REGISTRY ?= ghcr.io/mdw-nl
 PLATFORMS ?= linux/arm64,linux/amd64
 # Example for local development
 # TAG ?= local
