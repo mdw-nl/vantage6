@@ -111,7 +111,7 @@ class DockerManager(DockerBaseManager):
         self,
         ctx: DockerNodeContext | NodeContext,
         isolated_network_mgr: NetworkManager,
-        vpn_manager: VPNManager,
+        vpn_manager: VPNManager | None,
         tasks_dir: Path,
         client: NodeClient,
         proxy: Squid | None = None,
@@ -125,8 +125,8 @@ class DockerManager(DockerBaseManager):
             Context object from which some settings are obtained
         isolated_network_mgr: NetworkManager
             Manager for the isolated network
-        vpn_manager: VPNManager
-            VPN Manager object
+        vpn_manager: VPNManager | None
+            VPN Manager object, if VPN is configured
         tasks_dir: Path
             Directory in which this task's data are stored
         client: NodeClient
