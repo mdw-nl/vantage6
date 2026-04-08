@@ -36,6 +36,7 @@ setup(
         "gevent==25.4.2",
         "jinja2==3.1.6",
         "python-socketio==5.15.0",
+        "websocket-client==1.5.0",
         "requests==2.32.4",
         "psutil==5.9.0",
         "flask==3.1.1",
