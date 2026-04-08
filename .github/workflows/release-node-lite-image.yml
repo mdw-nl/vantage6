@@ -67,7 +67,7 @@ jobs:
           context: .
           file: docker/node.Dockerfile
           platforms: linux/amd64
-          push: false
+          push: true
           tags: ${{ steps.meta.outputs.image }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
