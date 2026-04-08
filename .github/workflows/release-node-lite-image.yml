@@ -75,4 +75,5 @@ jobs:
 
       - name: Show published image
         shell: bash
-        run: echo "Built image: ${{ steps.meta.outputs.image }}"
+        run: |
+          echo "Built image: ${{ steps.meta.outputs.image }}"
