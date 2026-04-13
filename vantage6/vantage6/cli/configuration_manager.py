@@ -1,6 +1,7 @@
-from schema import And, Or, Use, Optional
+from schema import And, Use, Optional
 
 from vantage6.common.configuration_manager import Configuration, ConfigurationManager
+from vantage6.common.node_context import NodeConfiguration, NodeConfigurationManager
 
 LOGGING_VALIDATORS = {
     "level": And(
@@ -33,63 +34,8 @@ class ServerConfiguration(Configuration):
     }
 
 
-class NodeConfiguration(Configuration):
-    """
-    Stores the node's configuration and defines a set of node-specific
-    validators.
-    """
-
-    VALIDATORS = {
-        "api_key": Use(str),
-        "server_url": Use(str),
-        "port": Or(Use(int), None),
-        "task_dir": Use(str),
-        # TODO: remove `dict` validation from databases
-        "databases": Or([Use(dict)], dict, None),
-        "api_path": Use(str),
-        "logging": LOGGING_VALIDATORS,
-        "encryption": {"enabled": bool, Optional("private_key"): Use(str)},
-        Optional("node_extra_env"): dict,
-        Optional("node_extra_mounts"): [str],
-        Optional("node_extra_hosts"): dict,
-        Optional("share_algorithm_logs"): Use(bool),
-    }
-
-
 class TestConfiguration(Configuration):
     VALIDATORS = {}
-
-
-class NodeConfigurationManager(ConfigurationManager):
-    """
-    Maintains the node's configuration.
-
-    Parameters
-    ----------
-    name : str
-        Name of the configuration file.
-    """
-
-    def __init__(self, name, *args, **kwargs) -> None:
-        super().__init__(conf_class=NodeConfiguration, name=name)
-
-    @classmethod
-    def from_file(cls, path: str) -> "NodeConfigurationManager":
-        """
-        Create a new instance of the NodeConfigurationManager from a
-        configuration file.
-
-        Parameters
-        ----------
-        path : str
-            Path to the configuration file.
-
-        Returns
-        -------
-        NodeConfigurationManager
-            A new instance of the NodeConfigurationManager.
-        """
-        return super().from_file(path, conf_class=NodeConfiguration)
 
 
 class ServerConfigurationManager(ConfigurationManager):

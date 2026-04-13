@@ -8,6 +8,7 @@ results from finished containers.
 """
 
 import os
+import importlib
 from socket import SocketIO
 import time
 import logging
@@ -35,8 +36,7 @@ from vantage6.common.globals import (
 )
 from vantage6.common.task_status import TaskStatus, has_task_failed
 from vantage6.common.docker.network_manager import NetworkManager
-from vantage6.algorithm.tools.wrappers import get_column_names
-from vantage6.cli.context.node import NodeContext
+from vantage6.common.node_context import NodeContext
 from vantage6.node.context import DockerNodeContext
 from vantage6.node.docker.docker_base import DockerBaseManager
 from vantage6.node.docker.vpn_manager import VPNManager
@@ -111,7 +111,7 @@ class DockerManager(DockerBaseManager):
         self,
         ctx: DockerNodeContext | NodeContext,
         isolated_network_mgr: NetworkManager,
-        vpn_manager: VPNManager,
+        vpn_manager: VPNManager | None,
         tasks_dir: Path,
         client: NodeClient,
         proxy: Squid | None = None,
@@ -125,8 +125,8 @@ class DockerManager(DockerBaseManager):
             Context object from which some settings are obtained
         isolated_network_mgr: NetworkManager
             Manager for the isolated network
-        vpn_manager: VPNManager
-            VPN Manager object
+        vpn_manager: VPNManager | None
+            VPN Manager object, if VPN is configured
         tasks_dir: Path
             Directory in which this task's data are stored
         client: NodeClient
@@ -1011,4 +1011,13 @@ class DockerManager(DockerBaseManager):
                 type_,
             )
             return []
-        return get_column_names(db["uri"], type_)
+        try:
+            wrappers = importlib.import_module("vantage6.algorithm.tools.wrappers")
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                "Sharing database columns requires the optional "
+                "'vantage6-algorithm-tools' package. Install it if you want "
+                "this feature."
+            ) from exc
+
+        return wrappers.get_column_names(db["uri"], type_)

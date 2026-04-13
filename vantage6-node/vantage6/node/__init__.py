@@ -24,6 +24,7 @@ see if there are new tasks available.
 
 import sys
 import os
+import importlib
 import random
 import time
 import datetime
@@ -33,7 +34,6 @@ import json
 import shutil
 import requests.exceptions
 import psutil
-import pynvml
 
 from pathlib import Path
 from threading import Thread
@@ -52,7 +52,7 @@ from vantage6.common.exceptions import AuthenticationException
 from vantage6.common.docker.network_manager import NetworkManager
 from vantage6.common.task_status import TaskStatus
 from vantage6.common.log import get_file_logger
-from vantage6.cli.context.node import NodeContext
+from vantage6.common.node_context import NodeContext
 from vantage6.node.context import DockerNodeContext
 from vantage6.node.globals import (
     NODE_PROXY_SERVER_HOSTNAME,
@@ -262,6 +262,14 @@ class Node:
         dict
             Dictionary containing GPU-related metrics.
         """
+        try:
+            pynvml = importlib.import_module("pynvml")
+        except ModuleNotFoundError as exc:
+            self.gpu_metadata_available = False
+            raise RuntimeError(
+                "GPU metadata requires the optional 'nvidia-ml-py' package. "
+                "Install it if you want this feature."
+            ) from exc
 
         try:
             pynvml.nvmlInit()
@@ -888,7 +896,7 @@ class Node:
 
     def setup_vpn_connection(
         self, isolated_network_mgr: NetworkManager, ctx: DockerNodeContext | NodeContext
-    ) -> VPNManager:
+    ) -> VPNManager | None:
         """
         Setup container which has a VPN connection
 
@@ -901,9 +909,14 @@ class Node:
 
         Returns
         -------
-        VPNManager
-            Manages the VPN connection
+        VPNManager | None
+            Manages the VPN connection when VPN is configured, otherwise None
         """
+        vpn_subnet = self.config.get("vpn_subnet")
+        if not vpn_subnet:
+            self.log.info("VPN is not configured, skipping VPN manager setup")
+            return None
+
         ovpn_file = os.path.join(self.__vpn_dir, VPN_CONFIG_FILE)
 
         self.log.info("Setting up VPN client container")
@@ -934,16 +947,14 @@ class Node:
             node_name=self.ctx.name,
             node_client=self.client,
             vpn_volume_name=vpn_volume_name,
-            vpn_subnet=self.config.get("vpn_subnet"),
+            vpn_subnet=vpn_subnet,
             alpine_image=custom_alpine,
             vpn_client_image=custom_vpn_client,
             network_config_image=custom_network,
             extra_hosts=extra_hosts,
         )
 
-        if not self.config.get("vpn_subnet"):
-            self.log.warn("VPN subnet is not defined! VPN disabled.")
-        elif not os.path.isfile(ovpn_file):
+        if not os.path.isfile(ovpn_file):
             # if vpn config doesn't exist, get it and write to disk
             self._connect_vpn(vpn_manager, VPNConnectMode.REFRESH_COMPLETE, ovpn_file)
         else:
