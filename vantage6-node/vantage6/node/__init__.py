@@ -443,7 +443,8 @@ class Node:
         except KeyError:
             # if a token could not be generated, this is a sign that task is already
             # finished. To prevent this from happening every time node is restarted,
-            # patch the node to failed
+            # we patch the run to failed and set finished_at so it is not synced as
+            # open again after a node restart.
             self.log.error(
                 "Container token could not be obtained: %s", token.get("msg")
             )
@@ -452,6 +453,9 @@ class Node:
                 data={
                     "status": TaskStatus.FAILED,
                     "log": "Could not obtain algorithm container token",
+                    "finished_at": datetime.datetime.now(
+                        datetime.timezone.utc
+                    ).isoformat(),
                 },
             )
             return  # prevent starting the run if there is no token
