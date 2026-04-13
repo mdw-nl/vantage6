@@ -40,7 +40,7 @@ setup(
         "requests==2.32.4",
         "psutil==5.9.0",
         "flask==3.1.1",
-        f"vantage6 == {version_ns['__version__']}",
+        f"vantage6-common == {version_ns['__version__']}",
         f"vantage6-client == {version_ns['__version__']}",
     ],
     extras_require={

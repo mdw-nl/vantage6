@@ -7,27 +7,53 @@ Some commands, such as ``vnode-local start``, are used within the Docker
 container when ``v6 node start`` is used.
 """
 
-import click
-import os
 import sys
-import questionary as q
-import errno
-from vantage6.common.globals import InstanceType
+
+import click
 
 import vantage6.node.globals as constants
 
-from colorama import Fore, Style
 from pathlib import Path
 
 from vantage6 import node
+from vantage6.common import error
+from vantage6.common.globals import InstanceType
 from vantage6.node.context import NodeContext, DockerNodeContext
-from vantage6.common import warning, info, error, ensure_config_dir_writable
 
-from vantage6.cli.configuration_wizard import (
-    configuration_wizard,
-    select_configuration_questionaire,
-)
 from vantage6.node._version import __version__
+
+
+def _load_configuration_helpers():
+    try:
+        from vantage6.cli.configuration_wizard import (
+            configuration_wizard,
+            select_configuration_questionaire,
+        )
+    except ModuleNotFoundError as exc:
+        if exc.name == "vantage6.cli" or exc.name.startswith("vantage6.cli."):
+            error(
+                "Interactive node configuration requires the 'vantage6' CLI "
+                "package. Install 'vantage6' or pass --config."
+            )
+            sys.exit(1)
+        raise
+
+    return configuration_wizard, select_configuration_questionaire
+
+
+def _load_questionary():
+    try:
+        import questionary as q
+    except ModuleNotFoundError as exc:
+        if exc.name == "questionary":
+            error(
+                "Interactive node prompts require the 'questionary' package. "
+                "Install 'questionary' or pass --config."
+            )
+            sys.exit(1)
+        raise
+
+    return q
 
 
 @click.group(name="vnode-local")
@@ -85,6 +111,7 @@ def cli_node_start(
     else:
         # in case no name is supplied, ask user to select one
         if not name:
+            _, select_configuration_questionaire = _load_configuration_helpers()
             name = select_configuration_questionaire(InstanceType.NODE, system_folders)
 
         # check that config exists in the APP, if not a questionaire will
@@ -95,7 +122,8 @@ def cli_node_start(
                 "create this config now?"
             )
 
-            if q.confirm(question).ask():
+            if _load_questionary().confirm(question).ask():
+                configuration_wizard, _ = _load_configuration_helpers()
                 configuration_wizard(InstanceType.NODE, name, system_folders)
 
             else:
