@@ -1,10 +1,7 @@
 import click
-import IPython
-from vantage6.common.globals import InstanceType
 import yaml
 
 from functools import wraps
-from traitlets.config import get_config
 from colorama import Fore, Style
 
 from vantage6.common import (
@@ -12,11 +9,10 @@ from vantage6.common import (
     error,
 )
 from vantage6.server.model.base import Database
-from vantage6.cli.globals import DEFAULT_SERVER_SYSTEM_FOLDERS as S_FOL
 from vantage6.server.controller import fixture
-from vantage6.cli.configuration_wizard import select_configuration_questionaire
-from vantage6.cli.context.server import ServerContext
 from vantage6.server._version import __version__
+from vantage6.server.context import ServerContext
+from vantage6.server.globals import DEFAULT_SERVER_SYSTEM_FOLDERS as S_FOL
 
 
 help_ = {
@@ -61,13 +57,8 @@ def click_insert_context(func: callable) -> callable:
             ctx = ServerContext.from_external_config_file(config, system_folders)
         else:
             if not name:
-                try:
-                    name = select_configuration_questionaire(
-                        InstanceType.SERVER, system_folders
-                    )
-                except Exception:
-                    error("No configurations could be found!")
-                    exit()
+                error("Provide either --config or --name")
+                exit(1)
 
             # raise error if config could not be found
             if not ServerContext.config_exists(name, system_folders):
@@ -147,6 +138,15 @@ def cli_server_shell(ctx: ServerContext) -> None:
     """
     # Note: ctx appears to be unused but is needed for the click_insert_context
     # to select the server and start the database connection.
+    try:
+        import IPython
+        from traitlets.config import get_config
+    except ImportError:
+        error(
+            "The server shell requires IPython. Install `ipython`."
+        )
+        return
+
     c = get_config()
     c.InteractiveShellEmbed.colors = "Linux"
 

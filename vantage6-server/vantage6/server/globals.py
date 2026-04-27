@@ -1,6 +1,13 @@
 from pathlib import Path
 
 from vantage6.common.globals import APPNAME
+# Keep this as a server.globals re-export for existing server imports while the
+# canonical value lives with ServerContext in vantage6.common.
+from vantage6.common.server_context import DEFAULT_SERVER_SYSTEM_FOLDERS
+
+#
+#   SERVER HOST SETTINGS
+#
 
 #
 #   INSTALLATION SETTINGS
