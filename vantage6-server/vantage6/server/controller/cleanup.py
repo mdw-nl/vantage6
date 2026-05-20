@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from vantage6.common.task_status import TaskStatus
 from vantage6.server.model import Run
 from vantage6.server.model.base import DatabaseSessionManager
-from vantage6.server.service.azure_storage_service import AzureStorageService
+from vantage6.server.service.storage_adapter import build_storage_adapter
 
 module_name = __name__.split(".")[-1]
 log = logging.getLogger(module_name)
@@ -22,9 +22,7 @@ def cleanup_runs_data(config: dict, include_input: bool = False):
         The number of days after which results should be cleared.
     """
     days = config.get("runs_data_cleanup_days")
-    azure_config = config.get("large_result_store", {})
-    if azure_config:
-        storage_adapter = AzureStorageService(azure_config)
+    storage_adapter = build_storage_adapter(config.get("large_result_store", {}))
     threshold_date = datetime.now(timezone.utc) - timedelta(days=days)
     session = DatabaseSessionManager.get_session()
 

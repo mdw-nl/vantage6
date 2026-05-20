@@ -62,6 +62,22 @@ REQUEST_TIMEOUT = 300
 # Default chunk size for streaming inputs and results
 DEFAULT_CHUNK_SIZE = 1024 * 1024  # 1MB
 
+# Wire-level chunk size for HTTP Transfer-Encoding: chunked uploads of blobs
+# and encrypted streams. Must stay well below ``MAX_CHUNKED_INPUT_PART`` —
+# a single chunk at or above the server-side limit makes
+# ``uwsgi.chunked_read`` raise ``IOError: unable to receive chunked part``.
+HTTP_UPLOAD_CHUNK_SIZE = 256 * 1024  # 256 KiB
+
+# Server-side cap (in bytes) on the size of a single chunked-input part,
+# passed to uwsgi as ``--chunked-input-limit``. Deliberately much larger
+# than ``HTTP_UPLOAD_CHUNK_SIZE`` so the friendly client always has
+# headroom, and small enough to reject obviously hostile bodies before
+# they consume server memory. Intentionally not the same constant as
+# ``HTTP_UPLOAD_CHUNK_SIZE``: client and server play opposite roles
+# (size we send vs. size we refuse above), and equality would remove the
+# safety margin a chunked-input limit is supposed to provide.
+MAX_CHUNKED_INPUT_PART = 16 * 1024 * 1024  # 16 MiB
+
 
 class InstanceType(str, Enum):
     """The types of instances that can be created."""

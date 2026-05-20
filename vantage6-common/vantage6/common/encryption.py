@@ -33,7 +33,7 @@ from cryptography.hazmat.primitives.serialization import (
 )
 
 from vantage6.common import Singleton, logger_name, bytes_to_base64s, base64s_to_bytes
-from vantage6.common.globals import DEFAULT_CHUNK_SIZE, STRING_ENCODING
+from vantage6.common.globals import HTTP_UPLOAD_CHUNK_SIZE, STRING_ENCODING
 
 SEPARATOR = "$"
 SHARED_ENCRYPT_KEY_LENGTH = 32
@@ -142,7 +142,7 @@ class CryptorBase(metaclass=Singleton):
         self,
         stream: IO[bytes],
         pubkey_base64s: str = None,
-        chunk_size=DEFAULT_CHUNK_SIZE,
+        chunk_size=HTTP_UPLOAD_CHUNK_SIZE,
     ):
         """
         Base64-encode a stream, yielding encoded chunks.
@@ -185,7 +185,7 @@ class CryptorBase(metaclass=Singleton):
             encoded = base64.b64encode(buffer)
             yield encoded
 
-    def decrypt_stream(self, stream, chunk_size=DEFAULT_CHUNK_SIZE):
+    def decrypt_stream(self, stream, chunk_size=HTTP_UPLOAD_CHUNK_SIZE):
         """
         Decode a base64-encoded stream to bytes, yielding decoded chunks.
         Naming here is confusing (this function does not decrypt),
@@ -700,7 +700,7 @@ class RSACryptor(CryptorBase):
                 pass
         return result
 
-    def _crypt_stream(self, stream, key, iv, chunk_size=DEFAULT_CHUNK_SIZE):
+    def _crypt_stream(self, stream, key, iv, chunk_size=HTTP_UPLOAD_CHUNK_SIZE):
         """
         Encrypt or decrypt a stream using AES-CTR. Since this is a
         symmetric encryption, the same function can be used for both
@@ -739,7 +739,7 @@ class RSACryptor(CryptorBase):
             yield final_chunk
 
     def encrypt_stream(
-        self, stream, pubkey_base64s: str, chunk_size=DEFAULT_CHUNK_SIZE
+        self, stream, pubkey_base64s: str, chunk_size=HTTP_UPLOAD_CHUNK_SIZE
     ):
         """
         Encrypt a stream using hybrid RSA/AES encryption.
@@ -780,7 +780,7 @@ class RSACryptor(CryptorBase):
         yield header_bytes
         yield from self._crypt_stream(stream, shared_key, iv_bytes, chunk_size)
 
-    def decrypt_stream(self, stream, chunk_size=DEFAULT_CHUNK_SIZE):
+    def decrypt_stream(self, stream, chunk_size=HTTP_UPLOAD_CHUNK_SIZE):
         """
         Decrypt a stream that was encrypted using hybrid RSA/AES encryption.
 

@@ -1,18 +1,19 @@
+"""Azure Blob Storage backend for the large result store."""
+
 import logging
 from typing import IO, Union
 
 from azure.identity import ClientSecretCredential
 from azure.storage.blob import BlobServiceClient
-from sqlalchemy import event
 
 from vantage6.common import logger_name
-from vantage6.server.model.run import Run
+from vantage6.server.service.storage_adapter import StorageAdapter
 
 module_name = logger_name(__name__)
 log = logging.getLogger(module_name)
 
 
-class AzureStorageService:
+class AzureStorageService(StorageAdapter):
     """
     A service for managing Azure Blob Storage.
     """
@@ -63,7 +64,7 @@ class AzureStorageService:
         self.container_client = self.blob_service_client.get_container_client(
             container_name
         )
-        event.listen(Run, "after_delete", self.delete_blob_after_run_delete)
+        super().__init__(config)
 
     def get_blob(self, blob_name: str) -> bytes:
         """
@@ -143,19 +144,3 @@ class AzureStorageService:
             container=self.container_name, blob=blob_name
         )
         return blob_client.download_blob()
-
-    def delete_blob_after_run_delete(self, mapper, connection, target):
-        """
-        SQLAlchemy event listener to delete the associated blob when a Run
-        instance is deleted.
-        """
-        if target.blob_storage_used:
-            try:
-                if target.result:
-                    self.delete_blob(target.result)
-                if target.input:
-                    self.delete_blob(target.input)
-            except Exception as e:
-                error_msg = f"Failed to delete blob for run {target.id}: {e}"
-                log.error(error_msg)
-                raise RuntimeError(error_msg)

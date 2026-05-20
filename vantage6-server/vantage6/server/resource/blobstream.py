@@ -15,6 +15,7 @@ from flask_restful import Api
 from http import HTTPStatus
 
 from vantage6.common import logger_name
+from vantage6.common.globals import MAX_CHUNKED_INPUT_PART
 from vantage6.common.task_status import has_task_finished
 from vantage6.server.permission import RuleCollection, Operation as P, Scope
 from vantage6.server.resource import (
@@ -23,6 +24,8 @@ from vantage6.server.resource import (
 )
 from vantage6.server.model import Run as db_Run, Task as db_Task
 
+
+_DEFAULT_CHUNKED_READ_TIMEOUT_S = 30
 
 module_name = logger_name(__name__)
 log = logging.getLogger(module_name)
@@ -265,6 +268,26 @@ class BlobStream(BlobStreamBase):
                 data = request.get_data()
                 self.storage_adapter.store_blob(result_uuid, data)
         except Exception as e:
+            # "unable to receive chunked part" is what uwsgi raises when a
+            # single chunked-input part exceeds ``--chunked-input-limit``.
+            # Storage adapters wrap the underlying IOError into RuntimeError
+            # but preserve the message, so we match on substring rather than
+            # type. Convert to a structured 413 so callers can self-diagnose.
+            if "unable to receive chunked part" in str(e).lower():
+                log.error(
+                    "Chunked upload rejected for blob %s: %s (limit=%d bytes)",
+                    result_uuid,
+                    e,
+                    MAX_CHUNKED_INPUT_PART,
+                )
+                return {
+                    "msg": (
+                        "Upload rejected: a single chunked-input part "
+                        f"exceeded the server limit of {MAX_CHUNKED_INPUT_PART} "
+                        "bytes. Reduce the per-chunk upload size."
+                    ),
+                    "max_chunked_input_part": MAX_CHUNKED_INPUT_PART,
+                }, HTTPStatus.REQUEST_ENTITY_TOO_LARGE
             log.error(f"Error uploading result: {e}")
             return {"msg": "Error uploading result!"}, HTTPStatus.INTERNAL_SERVER_ERROR
 
@@ -273,17 +296,18 @@ class BlobStream(BlobStreamBase):
 
 class UwsgiChunkedStream:
     """
-    Read data in chunks from uwsgi.
+    File-like reader over a uwsgi chunked HTTP request body.
+
+    Each call to ``uwsgi.chunked_read(timeout)`` returns the next HTTP
+    chunk delivered by the client; the argument is a per-call timeout in
+    seconds (uwsgi defaults to 4). The amount returned is determined by
+    the client's chunk sizing — not by this argument.
     """
 
     # TODO: Using uwsgi in python in combination with flask is not ideal.
     # It would be better to switch to a different server in the long term.
-    #
-    def __init__(self, chunk_size=4096):
-        """
-        Initialize the UwsgiChunkedStream.
-        """
-        self.chunk_size = chunk_size
+    def __init__(self, read_timeout_seconds: int = _DEFAULT_CHUNKED_READ_TIMEOUT_S):
+        self.read_timeout_seconds = read_timeout_seconds
         self._buffer = b""
         self._eof = False
 
@@ -296,7 +320,7 @@ class UwsgiChunkedStream:
             chunks = [self._buffer]
             self._buffer = b""
             while not self._eof:
-                chunk = uwsgi.chunked_read(self.chunk_size)
+                chunk = uwsgi.chunked_read(self.read_timeout_seconds)
                 if not chunk:
                     self._eof = True
                     break
@@ -304,7 +328,7 @@ class UwsgiChunkedStream:
             return b"".join(chunks)
 
         while len(self._buffer) < size and not self._eof:
-            chunk = uwsgi.chunked_read(self.chunk_size)
+            chunk = uwsgi.chunked_read(self.read_timeout_seconds)
             if not chunk:
                 self._eof = True
                 break

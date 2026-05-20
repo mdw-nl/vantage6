@@ -80,7 +80,7 @@ from vantage6.server.websockets import DefaultSocketNamespace
 from vantage6.server.default_roles import get_default_roles, DefaultRole
 from vantage6.server.hashedpassword import HashedPassword
 from vantage6.server.controller import cleanup
-from vantage6.server.service.azure_storage_service import AzureStorageService
+from vantage6.server.service.storage_adapter import build_storage_adapter
 
 
 # make sure the version is available
@@ -205,19 +205,21 @@ class ServerApp:
     def setup_large_result_store(self):
         """
         Setup the large result store for storing large results.
-        If configured, inputs and results will be stored in blob Storage.
+        If configured, inputs and results will be stored in the selected
+        backend (Azure Blob Storage or local filesystem).
         """
 
-        self.storage_adapter = None
         large_result_config = self.ctx.config.get("large_result_store", {})
         if not large_result_config:
             log.info(
                 "No large result store configured, using relational database for input and result storage"
             )
+            self.storage_adapter = None
             return
 
-        log.info("Using Azure Blob Storage as large result store")
-        self.storage_adapter = AzureStorageService(config=large_result_config)
+        store_type = large_result_config.get("type", "azure")
+        log.info("Using %r backend as large result store", store_type)
+        self.storage_adapter = build_storage_adapter(large_result_config)
 
     @staticmethod
     def _warn_if_cors_regex(origins: str | list[str]) -> None:

@@ -5,6 +5,19 @@
 Blob Storage
 ------------
 
+The large result store has two backends, selected via the ``type`` field of
+the ``large_result_store`` configuration block:
+
+- ``azure`` — Azure Blob Storage (see below).
+- ``file`` — local filesystem (see :ref:`file-storage-backend`).
+
+If ``type`` is omitted, ``file`` is assumed.
+If ``type`` is unrecognised, the large result store is disabled and a
+warning is logged at startup.
+
+Azure backend
++++++++++++++
+
 To use Azure Blob Storage, the following can be set in the server
 configuration file:
 
@@ -18,10 +31,10 @@ configuration file:
     client_secret: "your-client-secret"
     storage_account_name: "your-storage-account-name"
 
-At the moment, only the 'azure' storage type is supported. The 'test-container' refers to the azure blob container 
-(unrelated to Docker containers) in which all blobs are stored. This container should be created in advance manually. 
-Tenant id, client id and client secret are required for authentication (For help on setting up a managed identity, 
-see `here <https://learn.microsoft.com/en-us/azure/storage/blobs/authorize-access-azure-active-directory>`__). 
+The 'test-container' refers to the azure blob container
+(unrelated to Docker containers) in which all blobs are stored. This container should be created in advance manually.
+Tenant id, client id and client secret are required for authentication (For help on setting up a managed identity,
+see `here <https://learn.microsoft.com/en-us/azure/storage/blobs/authorize-access-azure-active-directory>`__).
 
 For development and testing purposes, `Azurite 
 <https://github.com/Azure/Azurite>`__ can be used. There are subtle differences
@@ -44,6 +57,42 @@ point to a local Azurite instance.
     Note that while it is also possible to use a connection string to connect to Azure Blob Storage,
     it is not recommended (accountname and accountkey will be stored plainly in the configuration,
     no automatic rotation, no fine-grained permissions via RBAC and so on).
+
+.. _file-storage-backend:
+
+File backend
+++++++++++++
+
+To store blobs on the local filesystem instead of Azure, set ``type`` to
+``file``:
+
+::
+
+  large_result_store:
+    type: "file"
+    # base_path: "/var/lib/vantage6/blobs"   # optional, see below
+    # container_name: "results"              # optional subdirectory
+
+When the server is started via ``v6 server start`` the CLI automatically
+bind-mounts the host directory into the container at ``/mnt/blobs`` and
+pins the in-container path with the ``VANTAGE6_BLOB_BASE_PATH``
+environment variable. The mount is created from ``base_path`` if set,
+otherwise from ``<server data dir>/blobs`` (next to where the server
+already keeps its logs and SQLite database). This makes it physically
+impossible for the in-container default to be picked up, so beginners
+get persistence on the host without having to configure any volume
+mounts. The CLI prints the resolved host path at startup.
+
+Blobs are written under a two-character shard derived from the UUID
+identifier (``{base_path}/{uuid[:2]}/{uuid}``) to keep individual
+directories from growing without bound. Writes are atomic: a tempfile
+is ``fsync``-ed and then renamed into place, so readers never observe
+a half-written blob.
+
+.. warning::
+    For multi-replica deployments ``base_path`` must point at a shared
+    filesystem (NFS, Azure Files, …). Replicas using local-only storage
+    will not see each other's blobs.
 
 Developer documentation
 +++++++++++++++++++++++

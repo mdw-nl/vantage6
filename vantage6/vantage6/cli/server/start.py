@@ -11,8 +11,13 @@ from vantage6.common.globals import (
     InstanceType,
 )
 
-from vantage6.common.globals import Ports, DEFAULT_PROMETHEUS_EXPORTER_PORT
+from vantage6.common.globals import (
+    MAX_CHUNKED_INPUT_PART,
+    Ports,
+    DEFAULT_PROMETHEUS_EXPORTER_PORT,
+)
 from vantage6.cli.context.server import ServerContext
+from vantage6.cli.globals import ServerMountPath
 from vantage6.cli.rabbitmq.queue_manager import RabbitMQManager
 from vantage6.cli.server.common import stop_ui
 from vantage6.cli.common.decorator import click_insert_context
@@ -21,6 +26,7 @@ from vantage6.cli.common.start import (
     attach_logs,
     check_for_start,
     get_image,
+    mount_blob_storage,
     mount_database,
     mount_source,
     pull_infra_image,
@@ -105,19 +111,19 @@ def cli_server_start(
     pull_infra_image(docker_client, image, InstanceType.SERVER)
 
     info("Creating mounts")
-    config_file = "/mnt/config.yaml"
+    config_file = ServerMountPath.CONFIG.value
     mounts = [
         docker.types.Mount(config_file, str(ctx.config_file), type="bind"),
-        docker.types.Mount("/mnt/log/", str(ctx.log_dir), type="bind"),
+        docker.types.Mount(
+            ServerMountPath.LOG_DIR.value, str(ctx.log_dir), type="bind"
+        ),
     ]
 
-    src_mount = mount_source(mount_src)
-    if src_mount:
-        mounts.append(src_mount)
+    db_mount, environment_vars = mount_database(ctx, InstanceType.SERVER)
+    blob_mount, blob_env = mount_blob_storage(ctx)
 
-    mount, environment_vars = mount_database(ctx, InstanceType.SERVER)
-    if mount:
-        mounts.append(mount)
+    mounts.extend(m for m in (mount_source(mount_src), db_mount, blob_mount) if m)
+    environment_vars = {**(environment_vars or {}), **blob_env}
 
     # Create a docker network for the server and other services like RabbitMQ
     # to reside in
@@ -171,13 +177,7 @@ def cli_server_start(
     # The `ip` and `port` refer here to the ip and port within the container.
     # So we do not really care that is it listening on all interfaces.
     internal_port = 5000
-    cmd = (
-        f"uwsgi --http :{internal_port} --gevent 1000 --http-websockets "
-        "--http-chunked-input --http-keepalive --post-buffering 0 "
-        "--master --callable app --disable-logging "
-        "--wsgi-file /vantage6/vantage6-server/vantage6/server/wsgi.py "
-        f"--pyargv {config_file}"
-    )
+    cmd = _build_uwsgi_command(internal_port, config_file)
 
     info(cmd)
 
@@ -210,6 +210,41 @@ def cli_server_start(
 
     if attach:
         attach_logs(container, InstanceType.SERVER)
+
+
+def _build_uwsgi_command(internal_port: int, config_file: str) -> str:
+    """
+    Assemble the uwsgi launch command for the server container.
+
+    Returns a single shell-style string (uwsgi accepts repeated flags on its
+    own command line).
+    """
+    options: list[tuple[str, str | None]] = [
+        # HTTP front-end
+        ("http", f":{internal_port}"),
+        ("http-websockets", None),
+        ("http-chunked-input", None),
+        ("http-keepalive", None),
+        ("post-buffering", "0"),
+        # Reject any single chunked-input part larger than this. Sized well
+        # above ``HTTP_UPLOAD_CHUNK_SIZE`` so friendly clients have headroom;
+        # protects the server from hostile or buggy clients sending
+        # multi-gigabyte chunks.
+        ("chunked-input-limit", str(MAX_CHUNKED_INPUT_PART)),
+        # Concurrency model
+        ("gevent", "1000"),
+        # Process lifecycle and logging
+        ("master", None),
+        ("disable-logging", None),
+        # WSGI application entry point
+        ("callable", "app"),
+        ("wsgi-file", "/vantage6/vantage6-server/vantage6/server/wsgi.py"),
+        ("pyargv", config_file),
+    ]
+    parts = ["uwsgi"]
+    for flag, value in options:
+        parts.append(f"--{flag}" if value is None else f"--{flag} {value}")
+    return " ".join(parts)
 
 
 def _start_rabbitmq(

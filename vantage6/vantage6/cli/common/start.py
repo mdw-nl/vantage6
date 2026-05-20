@@ -23,7 +23,7 @@ from vantage6.common.docker.addons import check_docker_running, pull_image
 from vantage6.cli.context import AlgorithmStoreContext, ServerContext
 from vantage6.cli.common.utils import print_log_worker
 from vantage6.cli.utils import check_config_name_allowed
-from vantage6.cli.globals import ServerGlobals, AlgoStoreGlobals
+from vantage6.cli.globals import AlgoStoreGlobals, ServerGlobals, ServerMountPath
 
 
 def check_for_start(ctx: AppContext, type_: InstanceType) -> DockerClient:
@@ -257,16 +257,19 @@ def mount_database(
         os.makedirs(dirname, exist_ok=True)
 
         # we're mounting the entire folder that contains the database
-        mount = docker.types.Mount("/mnt/database/", dirname, type="bind")
+        mount = docker.types.Mount(
+            ServerMountPath.DATABASE_DIR.value, dirname, type="bind"
+        )
+        db_uri = f"sqlite:///{ServerMountPath.DATABASE_DIR.value}{basename}"
 
         if type_ == InstanceType.SERVER:
             environment_vars = {
-                ServerGlobals.DB_URI_ENV_VAR.value: f"sqlite:////mnt/database/{basename}",
+                ServerGlobals.DB_URI_ENV_VAR.value: db_uri,
                 ServerGlobals.CONFIG_NAME_ENV_VAR.value: ctx.config_file_name,
             }
         elif type_ == InstanceType.ALGORITHM_STORE:
             environment_vars = {
-                AlgoStoreGlobals.DB_URI_ENV_VAR.value: f"sqlite:////mnt/database/{basename}",
+                AlgoStoreGlobals.DB_URI_ENV_VAR.value: db_uri,
                 AlgoStoreGlobals.CONFIG_NAME_ENV_VAR.value: ctx.config_file_name,
             }
     else:
@@ -277,6 +280,52 @@ def mount_database(
         info("Consider using the docker-compose method to start a server")
 
     return mount, environment_vars
+
+
+def mount_blob_storage(ctx: ServerContext) -> tuple[docker.types.Mount | None, dict]:
+    """
+    Mount the on-disk blob store for the file-based large_result_store backend.
+
+    If ``large_result_store.type`` is ``"file"`` the host directory must be
+    bind-mounted into the server container, otherwise blobs would accumulate
+    inside the (ephemeral) container filesystem. To shield beginners from
+    forgetting to set this up, the helper auto-defaults ``base_path`` to a
+    subdirectory of ``ctx.data_dir`` if the user hasn't specified one.
+
+    Parameters
+    ----------
+    ctx : ServerContext
+        The server context.
+
+    Returns
+    -------
+    tuple[docker.types.Mount | None, dict]
+        The bind mount (or ``None`` if not applicable) and the env-var dict
+        that pins the in-container path the server should use.
+    """
+    cfg = ctx.config.get("large_result_store", {}) or {}
+    if not cfg:
+        return None, {}
+    if cfg.get("type", "file") != "file":
+        return None, {}
+
+    base_path = cfg.get("base_path")
+    if base_path:
+        host_path = os.path.abspath(os.path.expanduser(base_path))
+    else:
+        host_path = str(ctx.data_dir / "blobs")
+        info(
+            f"large_result_store.base_path not set; defaulting to {host_path} "
+            "on host (auto-mounted into the server container)."
+        )
+
+    os.makedirs(host_path, exist_ok=True)
+    container_path = ServerMountPath.BLOB_STORAGE.value
+    info(f"Mounting blob storage host dir {host_path} -> {container_path}")
+
+    mount = docker.types.Mount(container_path, host_path, type="bind")
+    env = {ServerGlobals.BLOB_BASE_PATH_ENV_VAR.value: container_path}
+    return mount, env
 
 
 def attach_logs(container: Container, type_: InstanceType) -> None:

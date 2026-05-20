@@ -67,6 +67,17 @@ class ServerGlobals(str, Enum):
 
     DB_URI_ENV_VAR = "VANTAGE6_DB_URI"
     CONFIG_NAME_ENV_VAR = "VANTAGE6_CONFIG_NAME"
+    BLOB_BASE_PATH_ENV_VAR = "VANTAGE6_BLOB_BASE_PATH"
+
+
+class ServerMountPath(str, Enum):
+    """In-container bind-mount paths used by the server / algorithm-store CLI."""
+
+    CONFIG = "/mnt/config.yaml"
+    IMPORT_CONFIG = "/mnt/import.yaml"
+    LOG_DIR = "/mnt/log/"
+    DATABASE_DIR = "/mnt/database/"
+    BLOB_STORAGE = "/mnt/blobs"
 
 
 class AlgoStoreGlobals(str, Enum):
