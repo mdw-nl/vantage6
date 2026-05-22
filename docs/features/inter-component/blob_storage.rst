@@ -74,6 +74,23 @@ unavailable, set ``VANTAGE6_RUN_DATA_BASE_PATH`` on the server
 container to override it (and mount whatever you want at that path
 instead).
 
+The env-var value is used **verbatim** as the storage root — nothing
+is appended to it. Run-data entries land at
+``{VANTAGE6_RUN_DATA_BASE_PATH}/{uuid[:2]}/{uuid}``. For example, with
+``VANTAGE6_RUN_DATA_BASE_PATH=/var/lib/v6/runs`` and a run-data UUID
+of ``abc12345-…``, the file is written to
+``/var/lib/v6/runs/ab/abc12345-…``.
+
+.. warning::
+   This override is intended for the docker-compose path, where you
+   control the bind-mount yourself. Under ``v6 server start`` the CLI
+   always bind-mounts the host's ``<ctx.data_dir>/run_data`` to the
+   container's ``/mnt/run_data`` and does **not** read the env var —
+   setting ``VANTAGE6_RUN_DATA_BASE_PATH`` on a CLI-launched server
+   would make the server read from a path the CLI did not mount, so
+   run data would land inside the ephemeral container filesystem and
+   be lost when the container exits.
+
 On-disk layout
 ~~~~~~~~~~~~~~
 
