@@ -17,6 +17,7 @@ configuration block.
 """
 
 import logging
+import os
 from abc import ABC, abstractmethod
 from typing import IO, Iterator, Union
 
@@ -50,7 +51,13 @@ class StorageAdapter(ABC):
 
     @abstractmethod
     def get_run_data(self, name: str) -> bytes:
-        """Return the full content of a run-data entry as bytes."""
+        """Return the full content of a run-data entry as bytes.
+
+        Raises
+        ------
+        FileNotFoundError
+            If no entry exists for ``name``.
+        """
 
     @abstractmethod
     def store_run_data(self, name: str, data: Union[IO, bytes]) -> None:
@@ -62,7 +69,13 @@ class StorageAdapter(ABC):
 
     @abstractmethod
     def stream_run_data(self, name: str):
-        """Return a streaming reader exposing a ``chunks()`` iterator."""
+        """Return a streaming reader exposing a ``chunks()`` iterator.
+
+        Raises
+        ------
+        FileNotFoundError
+            If no entry exists for ``name``.
+        """
 
     def _delete_run_data_after_run_delete(
         self, mapper, connection, target
@@ -104,9 +117,16 @@ def build_storage_adapter(config: dict) -> StorageAdapter | None:
 
         return AzureStorageService(config=config)
     if store_type == "file":
-        from vantage6.server.service.file_storage_service import FileStorageService
+        from vantage6.server.service.file_storage_service import (
+            DEFAULT_RUN_DATA_BASE_PATH,
+            RUN_DATA_BASE_PATH_ENV_VAR,
+            FileStorageService,
+        )
 
-        return FileStorageService(config=config)
+        base_path = os.environ.get(
+            RUN_DATA_BASE_PATH_ENV_VAR, DEFAULT_RUN_DATA_BASE_PATH
+        )
+        return FileStorageService(config=config, base_path=base_path)
 
     log.error(
         "Unknown large_result_store.type=%r; large result store disabled.",

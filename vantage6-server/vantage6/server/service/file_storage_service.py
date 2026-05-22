@@ -1,15 +1,23 @@
 """Local-filesystem backend for the large result store.
 
-Run-data entries are written under a configurable ``base_path`` using a
-two-character shard derived from the name: ``{base_path}/{name[:2]}/{name}``.
-This keeps any single directory's fan-out bounded while still being
-trivial to reason about.
+Run-data entries are written under ``base_path`` using a two-character
+shard derived from the name: ``{base_path}/{name[:2]}/{name}``. This
+keeps any single directory's fan-out bounded while still being trivial
+to reason about.
+
+``base_path`` is supplied by the caller. The factory in
+:mod:`vantage6.server.service.storage_adapter` resolves it from the
+``VANTAGE6_RUN_DATA_BASE_PATH`` environment variable, defaulting to
+``/mnt/run_data``. Operators control where run data lives by mounting
+that path into the server container (the ``v6 server start`` CLI does
+this automatically; under docker-compose the user adds a volume mount
+themselves).
 
 Writes are atomic: a tempfile is written in the same shard directory,
 ``fsync``-ed, and then ``os.replace``-d into place, so readers never
-observe a half-written entry. For multi-replica deployments ``base_path``
-must point at a shared filesystem (NFS, Azure Files, …) — otherwise
-replicas will not see each other's run data.
+observe a half-written entry. For multi-replica deployments the mount
+target must point at a shared filesystem (NFS, Azure Files, …) —
+otherwise replicas will not see each other's run data.
 """
 
 import logging
@@ -28,6 +36,7 @@ log = logging.getLogger(module_name)
 
 _RUN_DATA_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$")
 RUN_DATA_BASE_PATH_ENV_VAR = "VANTAGE6_RUN_DATA_BASE_PATH"
+DEFAULT_RUN_DATA_BASE_PATH = "/mnt/run_data"
 
 
 class FileRunDataStream(RunDataStream):
@@ -48,26 +57,8 @@ class FileRunDataStream(RunDataStream):
 class FileStorageService(StorageAdapter):
     """Filesystem-backed implementation of :class:`StorageAdapter`."""
 
-    def __init__(self, config: dict) -> None:
-        base_path = os.environ.get(RUN_DATA_BASE_PATH_ENV_VAR) or config.get(
-            "base_path"
-        )
-        if not base_path:
-            raise ValueError(
-                "File storage base path must be provided via the "
-                f"{RUN_DATA_BASE_PATH_ENV_VAR} environment variable or the "
-                "'base_path' key of the large_result_store config."
-            )
-
+    def __init__(self, config: dict, base_path: str | Path) -> None:
         root = Path(base_path).expanduser().resolve()
-        container_name = config.get("container_name")
-        if container_name:
-            if not _RUN_DATA_NAME_RE.match(container_name):
-                raise ValueError(
-                    f"Invalid container_name {container_name!r}: must match {_RUN_DATA_NAME_RE.pattern}"
-                )
-            root = root / container_name
-
         root.mkdir(parents=True, exist_ok=True)
         if not os.access(root, os.W_OK):
             log.warning("File storage base path %s is not writable.", root)

@@ -70,18 +70,28 @@ to ``file``:
 
   large_result_store:
     type: "file"
-    # base_path: "/var/lib/vantage6/run_data"   # optional, see below
-    # container_name: "results"                 # optional subdirectory
 
-When the server is started via ``v6 server start`` the CLI automatically
-bind-mounts the host directory into the container at ``/mnt/run_data``
-and pins the in-container path with the ``VANTAGE6_RUN_DATA_BASE_PATH``
-environment variable. The mount is created from ``base_path`` if set,
-otherwise from ``<server data dir>/run_data`` (next to where the server
-already keeps its logs and SQLite database). This makes it physically
-impossible for the in-container default to be picked up, so users
-get persistence on the host without having to configure any volume
-mounts. The CLI prints the resolved host path at startup.
+Run data is always written to ``/mnt/run_data`` inside the server 
+container, and where that path points to on the host is decided by
+how you launch the server:
+
+- **Under ``v6 server start``**, the CLI automatically bind-mounts
+  ``<server data dir>/run_data`` on the host to ``/mnt/run_data`` in the
+  container. There is no host-path configuration to set; the CLI prints
+  the resolved host path at startup.
+- **Under docker-compose**, you mount the host directory of your choice
+  to ``/mnt/run_data`` in the server container, e.g.
+
+  ::
+
+    services:
+      server:
+        volumes:
+          - ./my-run-data:/mnt/run_data
+
+If for some reason the in-container path ``/mnt/run_data`` is
+unavailable, set ``VANTAGE6_RUN_DATA_BASE_PATH`` on the server container
+to override it (and mount whatever you want at that path instead).
 
 Run-data entries are written under a two-character shard derived from
 the UUID identifier (``{base_path}/{uuid[:2]}/{uuid}``) to keep
@@ -90,9 +100,9 @@ a tempfile is ``fsync``-ed and then renamed into place, so readers
 never observe a half-written entry.
 
 .. warning::
-    For multi-replica deployments ``base_path`` must point at a shared
-    filesystem (NFS, Azure Files, …). Replicas using local-only storage
-    will not see each other's run data.
+    For multi-replica deployments the host mount target must point at a
+    shared filesystem (NFS, Azure Files, …). Replicas using local-only
+    storage will not see each other's run data.
 
 Developer documentation
 +++++++++++++++++++++++

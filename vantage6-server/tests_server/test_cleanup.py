@@ -116,9 +116,12 @@ class TestCleanupRunsIsolated(unittest.TestCase):
         )
 
         with tempfile.TemporaryDirectory() as base_dir:
-            from vantage6.server.service.file_storage_service import FileStorageService
+            from vantage6.server.service.file_storage_service import (
+                RUN_DATA_BASE_PATH_ENV_VAR,
+                FileStorageService,
+            )
 
-            adapter = FileStorageService({"base_path": base_dir})
+            adapter = FileStorageService({}, base_path=base_dir)
             adapter.store_run_data(result_uuid, b"result-bytes")
             adapter.store_run_data(input_uuid, b"input-bytes")
             result_path = Path(base_dir) / result_uuid[:2] / result_uuid
@@ -128,13 +131,19 @@ class TestCleanupRunsIsolated(unittest.TestCase):
 
             config = {
                 "runs_data_cleanup_days": 30,
-                "large_result_store": {"type": "file", "base_path": base_dir},
+                "large_result_store": {"type": "file"},
             }
 
             self.session.add(run)
             self.session.commit()
 
-            cleanup.cleanup_runs_data(config, include_input=True)
+            # The cleanup controller builds its own adapter via the
+            # factory, which reads the env var — point it at the same
+            # tempdir so it deletes the files we just wrote.
+            with patch.dict(
+                "os.environ", {RUN_DATA_BASE_PATH_ENV_VAR: base_dir}
+            ):
+                cleanup.cleanup_runs_data(config, include_input=True)
             self.session.refresh(run)
 
             assert not result_path.exists()

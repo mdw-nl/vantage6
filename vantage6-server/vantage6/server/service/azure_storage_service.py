@@ -3,6 +3,7 @@
 import logging
 from typing import IO, Union
 
+from azure.core.exceptions import ResourceNotFoundError
 from azure.identity import ClientSecretCredential
 from azure.storage.blob import BlobServiceClient
 
@@ -86,8 +87,11 @@ class AzureStorageService(StorageAdapter):
         blob_client = self.blob_service_client.get_blob_client(
             container=self.container_name, blob=name
         )
-        stream = blob_client.download_blob()
-        return stream.readall()
+        try:
+            stream = blob_client.download_blob()
+            return stream.readall()
+        except ResourceNotFoundError as e:
+            raise FileNotFoundError(f"Run data {name!r} not found") from e
 
     def store_run_data(self, name: str, data: Union[IO, bytes]) -> None:
         """
@@ -127,7 +131,13 @@ class AzureStorageService(StorageAdapter):
         blob_client = self.blob_service_client.get_blob_client(
             container=self.container_name, blob=name
         )
-        blob_client.delete_blob()
+        try:
+            blob_client.delete_blob()
+        except ResourceNotFoundError:
+            # StorageAdapter.delete_run_data is contractually idempotent;
+            # the after_delete listener relies on this when a Run row whose
+            # blob has already been deleted is removed from the DB.
+            pass
 
     def stream_run_data(self, name: str):
         """
@@ -150,4 +160,7 @@ class AzureStorageService(StorageAdapter):
         blob_client = self.blob_service_client.get_blob_client(
             container=self.container_name, blob=name
         )
-        return blob_client.download_blob()
+        try:
+            return blob_client.download_blob()
+        except ResourceNotFoundError as e:
+            raise FileNotFoundError(f"Run data {name!r} not found") from e

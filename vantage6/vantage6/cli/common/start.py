@@ -282,54 +282,32 @@ def mount_database(
     return mount, environment_vars
 
 
-def mount_run_data_storage(
-    ctx: ServerContext,
-) -> tuple[docker.types.Mount | None, dict]:
+def mount_run_data_storage(ctx: ServerContext) -> docker.types.Mount | None:
     """
     Mount the on-disk run-data store for the file-based large_result_store
     backend.
 
-    If ``large_result_store.type`` is ``"file"`` the host directory must be
-    bind-mounted into the server container, otherwise run data would
-    accumulate inside the (ephemeral) container filesystem. To shield
-    users from forgetting to set this up, the helper auto-defaults
-    ``base_path`` to a subdirectory of ``ctx.data_dir`` if the user
-    hasn't specified one.
+    If ``large_result_store.type`` is ``"file"``, ``<ctx.data_dir>/run_data``
+    on the host is bind-mounted into the server container at the default
+    in-container path. Otherwise run data would accumulate inside the
+    (ephemeral) container filesystem.
 
-    Parameters
-    ----------
-    ctx : ServerContext
-        The server context.
-
-    Returns
-    -------
-    tuple[docker.types.Mount | None, dict]
-        The bind mount (or ``None`` if not applicable) and the env-var dict
-        that pins the in-container path the server should use.
+    The CLI does not expose any knob for changing either side of this
+    mount — operators who need a different layout should use the
+    docker-compose deployment path instead.
     """
     cfg = ctx.config.get("large_result_store", {}) or {}
     if not cfg:
-        return None, {}
+        return None
     if cfg.get("type", "file") != "file":
-        return None, {}
+        return None
 
-    base_path = cfg.get("base_path")
-    if base_path:
-        host_path = os.path.abspath(os.path.expanduser(base_path))
-    else:
-        host_path = str(ctx.data_dir / "run_data")
-        info(
-            f"large_result_store.base_path not set; defaulting to {host_path} "
-            "on host (auto-mounted into the server container)."
-        )
-
+    host_path = str(ctx.data_dir / "run_data")
     os.makedirs(host_path, exist_ok=True)
     container_path = ServerMountPath.RUN_DATA_STORAGE.value
     info(f"Mounting run data storage host dir {host_path} -> {container_path}")
 
-    mount = docker.types.Mount(container_path, host_path, type="bind")
-    env = {ServerGlobals.RUN_DATA_BASE_PATH_ENV_VAR.value: container_path}
-    return mount, env
+    return docker.types.Mount(container_path, host_path, type="bind")
 
 
 def attach_logs(container: Container, type_: InstanceType) -> None:

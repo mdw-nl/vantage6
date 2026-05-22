@@ -67,7 +67,6 @@ class ServerGlobals(str, Enum):
 
     DB_URI_ENV_VAR = "VANTAGE6_DB_URI"
     CONFIG_NAME_ENV_VAR = "VANTAGE6_CONFIG_NAME"
-    RUN_DATA_BASE_PATH_ENV_VAR = "VANTAGE6_RUN_DATA_BASE_PATH"
 
 
 class ServerMountPath(str, Enum):
