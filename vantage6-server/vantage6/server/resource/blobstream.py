@@ -274,10 +274,10 @@ class BlobStream(BlobStreamBase):
             # *most commonly* when a single chunked-input part exceeds
             # ``--chunked-input-limit``, but the same error string can come
             # from other transport-level issues (client disconnects mid-part,
-            # malformed chunk framing, …). We surface a 413 because exceeding
-            # the limit is the dominant case and the only one the client can
-            # remediate on its own, but the message is intentionally vague:
-            # check the server logs for the underlying cause.
+            # malformed chunk framing, …). Because we can't know which one
+            # we hit, the response is a generic 400 — a 413 would assert
+            # too much. The message and ``max_chunked_input_part`` field
+            # let the client try the per-part-limit hypothesis first.
             if "unable to receive chunked part" in str(e).lower():
                 log.error(
                     "Chunked upload rejected for run data %s: %s (limit=%d bytes)",
@@ -295,7 +295,7 @@ class BlobStream(BlobStreamBase):
                         "server logs to confirm."
                     ),
                     "max_chunked_input_part": MAX_CHUNKED_INPUT_PART,
-                }, HTTPStatus.REQUEST_ENTITY_TOO_LARGE
+                }, HTTPStatus.BAD_REQUEST
             log.error(f"Error uploading result: {e}")
             return {"msg": "Error uploading result!"}, HTTPStatus.INTERNAL_SERVER_ERROR
 
