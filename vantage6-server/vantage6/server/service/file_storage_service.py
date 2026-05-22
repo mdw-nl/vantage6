@@ -29,7 +29,11 @@ from typing import IO, Iterator, Union
 
 from vantage6.common import logger_name
 from vantage6.common.globals import DEFAULT_CHUNK_SIZE
-from vantage6.server.service.storage_adapter import RunDataStream, StorageAdapter
+from vantage6.server.service.storage_adapter import (
+    RunDataNotFoundError,
+    RunDataStream,
+    StorageAdapter,
+)
 
 module_name = logger_name(__name__)
 log = logging.getLogger(module_name)
@@ -75,9 +79,43 @@ class FileStorageService(StorageAdapter):
     def get_run_data(self, name: str) -> bytes:
         path = self._path_for(name)
         log.debug("Retrieving run data: %s", path)
-        return path.read_bytes()
+        try:
+            return path.read_bytes()
+        except FileNotFoundError as e:
+            raise RunDataNotFoundError(
+                f"Run data {name!r} not found at {path}"
+            ) from e
 
     def store_run_data(self, name: str, data: Union[IO, bytes]) -> None:
+        """Atomically write ``data`` under ``name``.
+
+        The recipe below ("write tempfile in the same dir, fsync, rename,
+        fsync the dir") is the standard POSIX atomic-write pattern. Each
+        step is load-bearing:
+
+        - **Tempfile in the same shard directory.** ``os.replace`` only
+          guarantees atomicity within a single filesystem; writing to
+          ``/tmp`` first and then renaming risks an ``EXDEV`` cross-device
+          error. ``prefix=".tmp-"`` makes incomplete uploads recognisable
+          to cleanup tooling (and to the test that scans for leftovers).
+        - **``flush + fsync`` before the rename.** Without ``fsync``, the
+          file's data may still live in the kernel page cache when
+          ``os.replace`` swings the directory entry. A power-loss between
+          the rename and the eventual writeback would leave a zero-byte
+          or truncated file under ``target``.
+        - **``os.replace`` (not ``Path.rename``).** ``os.replace`` is
+          atomic and overwrites the destination if it already exists,
+          which matters because callers occasionally re-upload the same
+          UUID. ``Path.rename`` raises on POSIX if the target exists.
+        - **``_fsync_dir`` after the rename.** The rename itself is a
+          directory-entry change, and on most filesystems that change is
+          also buffered. Fsyncing the parent directory makes the new
+          name durable across a crash.
+        - **Cleanup in ``except``.** Any failure (write error, OOM, the
+          ``os.replace`` mock in the crash-safety test) must remove the
+          tempfile so we don't leak ``.tmp-*`` files that confuse
+          operators and the leftover-tempfile test.
+        """
         target = self._path_for(name)
         log.debug("Storing run data: %s", target)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -101,6 +139,9 @@ class FileStorageService(StorageAdapter):
             os.replace(tmp_path, target)
             self._fsync_dir(target.parent)
         except Exception as e:
+            # Tempfile cleanup must be best-effort: the original failure
+            # is what we want to surface, not a secondary close/unlink
+            # error masking it.
             try:
                 tmp.close()
             except Exception:
@@ -125,7 +166,7 @@ class FileStorageService(StorageAdapter):
         path = self._path_for(name)
         log.debug("Streaming run data: %s", path)
         if not path.exists():
-            raise FileNotFoundError(f"Run data {name!r} not found at {path}")
+            raise RunDataNotFoundError(f"Run data {name!r} not found at {path}")
         return FileRunDataStream(path)
 
     @staticmethod

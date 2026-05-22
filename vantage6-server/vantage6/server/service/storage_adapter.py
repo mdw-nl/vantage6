@@ -31,6 +31,15 @@ module_name = logger_name(__name__)
 log = logging.getLogger(module_name)
 
 
+class RunDataNotFoundError(Exception):
+    """Raised by storage adapters when no entry exists for the given name.
+
+    Backend-neutral: file backend raises this in place of the bare
+    ``FileNotFoundError`` from ``Path.read_bytes()``; Azure backend
+    raises it in place of ``azure.core.exceptions.ResourceNotFoundError``.
+    """
+
+
 class RunDataStream(ABC):
     """Streaming reader for stored run data.
 
@@ -56,7 +65,7 @@ class StorageAdapter(ABC):
 
         Raises
         ------
-        FileNotFoundError
+        RunDataNotFoundError
             If no entry exists for ``name``.
         """
 
@@ -74,7 +83,7 @@ class StorageAdapter(ABC):
 
         Raises
         ------
-        FileNotFoundError
+        RunDataNotFoundError
             If no entry exists for ``name``.
         """
 

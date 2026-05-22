@@ -14,7 +14,10 @@ from vantage6.server.service.file_storage_service import (
     RUN_DATA_BASE_PATH_ENV_VAR,
     FileStorageService,
 )
-from vantage6.server.service.storage_adapter import build_storage_adapter
+from vantage6.server.service.storage_adapter import (
+    RunDataNotFoundError,
+    build_storage_adapter,
+)
 
 
 def _uuid() -> str:
@@ -96,11 +99,11 @@ class TestFileStorageService(unittest.TestCase):
         self.assertEqual(adapter.base_path, self.tmp_path.resolve())
 
     def test_stream_missing_run_data_raises(self) -> None:
-        with self.assertRaises(FileNotFoundError):
+        with self.assertRaises(RunDataNotFoundError):
             self.adapter.stream_run_data(_uuid())
 
     def test_get_missing_run_data_raises(self) -> None:
-        with self.assertRaises(FileNotFoundError):
+        with self.assertRaises(RunDataNotFoundError):
             self.adapter.get_run_data(_uuid())
 
 

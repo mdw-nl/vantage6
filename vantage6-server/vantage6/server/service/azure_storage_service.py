@@ -8,7 +8,10 @@ from azure.identity import ClientSecretCredential
 from azure.storage.blob import BlobServiceClient
 
 from vantage6.common import logger_name
-from vantage6.server.service.storage_adapter import StorageAdapter
+from vantage6.server.service.storage_adapter import (
+    RunDataNotFoundError,
+    StorageAdapter,
+)
 
 module_name = logger_name(__name__)
 log = logging.getLogger(module_name)
@@ -91,7 +94,7 @@ class AzureStorageService(StorageAdapter):
             stream = blob_client.download_blob()
             return stream.readall()
         except ResourceNotFoundError as e:
-            raise FileNotFoundError(f"Run data {name!r} not found") from e
+            raise RunDataNotFoundError(f"Run data {name!r} not found") from e
 
     def store_run_data(self, name: str, data: Union[IO, bytes]) -> None:
         """
@@ -163,4 +166,4 @@ class AzureStorageService(StorageAdapter):
         try:
             return blob_client.download_blob()
         except ResourceNotFoundError as e:
-            raise FileNotFoundError(f"Run data {name!r} not found") from e
+            raise RunDataNotFoundError(f"Run data {name!r} not found") from e
