@@ -77,8 +77,8 @@ class TestCleanupRunsIsolated(unittest.TestCase):
 
         config = {
             "runs_data_cleanup_days": 30,
-            "large_result_store": {
-                "type": "azure",
+            "large_run_data_store": "azure",
+            "azure_run_data_store": {
                 "container_name": "test-container",
                 "connection_string": "DefaultEndpointsProtocol=https;AccountName=dummyname;AccountKey=dummykey",
             },
@@ -131,7 +131,7 @@ class TestCleanupRunsIsolated(unittest.TestCase):
 
             config = {
                 "runs_data_cleanup_days": 30,
-                "large_result_store": {"type": "file"},
+                "large_run_data_store": "filesystem",
             }
 
             self.session.add(run)

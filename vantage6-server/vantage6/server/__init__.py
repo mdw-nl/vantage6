@@ -204,22 +204,21 @@ class ServerApp:
 
     def setup_large_result_store(self):
         """
-        Setup the large result store for storing large results.
+        Setup the large run-data store for storing large inputs and results.
         If configured, inputs and results will be stored in the selected
-        backend (Azure Blob Storage or local filesystem).
+        backend (Azure Blob Storage or local filesystem); otherwise the
+        relational database is used.
         """
-
-        large_result_config = self.ctx.config.get("large_result_store", {})
-        if not large_result_config:
+        store_type = self.ctx.config.get("large_run_data_store")
+        if store_type is None:
             log.info(
-                "No large result store configured, using relational database for input and result storage"
+                "No large run-data store configured, using relational database for input and result storage"
             )
             self.storage_adapter = None
             return
 
-        store_type = large_result_config.get("type", "azure")
-        log.info("Using %r backend as large result store", store_type)
-        self.storage_adapter = build_storage_adapter(large_result_config)
+        log.info("Using %r backend as large run-data store", store_type)
+        self.storage_adapter = build_storage_adapter(self.ctx.config)
 
     @staticmethod
     def _warn_if_cors_regex(origins: str | list[str]) -> None:

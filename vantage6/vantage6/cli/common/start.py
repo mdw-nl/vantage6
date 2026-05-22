@@ -284,22 +284,19 @@ def mount_database(
 
 def mount_run_data_storage(ctx: ServerContext) -> docker.types.Mount | None:
     """
-    Mount the on-disk run-data store for the file-based large_result_store
-    backend.
+    Mount the on-disk run-data store for the file-based
+    ``large_run_data_store`` backend.
 
-    If ``large_result_store.type`` is ``"file"``, ``<ctx.data_dir>/run_data``
-    on the host is bind-mounted into the server container at the default
-    in-container path. Otherwise run data would accumulate inside the
-    (ephemeral) container filesystem.
+    If ``large_run_data_store`` is ``"filesystem"``,
+    ``<ctx.data_dir>/run_data`` on the host is bind-mounted into the
+    server container at the default in-container path. Otherwise run
+    data would accumulate inside the (ephemeral) container filesystem.
 
     The CLI does not expose any knob for changing either side of this
     mount — operators who need a different layout should use the
     docker-compose deployment path instead.
     """
-    cfg = ctx.config.get("large_result_store", {}) or {}
-    if not cfg:
-        return None
-    if cfg.get("type", "file") != "file":
+    if ctx.config.get("large_run_data_store") != "filesystem":
         return None
 
     host_path = str(ctx.data_dir / "run_data")

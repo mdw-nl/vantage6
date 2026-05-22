@@ -178,7 +178,23 @@ def cli_server_start(
     # The `ip` and `port` refer here to the ip and port within the container.
     # So we do not really care that is it listening on all interfaces.
     internal_port = 5000
-    cmd = _build_uwsgi_command(internal_port, config_file)
+    cmd = (
+        f"uwsgi --http :{internal_port} "
+        "--http-websockets "
+        "--http-chunked-input "
+        "--http-keepalive "
+        "--post-buffering 0 "
+        # Reject any single chunked-input part larger than this. Sized well
+        # above ``HTTP_UPLOAD_CHUNK_SIZE`` so friendly clients have headroom;
+        # protects the server from hostile or buggy clients sending
+        # multi-gigabyte chunks.
+        f"--chunked-input-limit {MAX_CHUNKED_INPUT_PART} "
+        "--gevent 1000 "
+        "--master --disable-logging "
+        "--callable app "
+        "--wsgi-file /vantage6/vantage6-server/vantage6/server/wsgi.py "
+        f"--pyargv {config_file}"
+    )
 
     info(cmd)
 
@@ -211,41 +227,6 @@ def cli_server_start(
 
     if attach:
         attach_logs(container, InstanceType.SERVER)
-
-
-def _build_uwsgi_command(internal_port: int, config_file: str) -> str:
-    """
-    Assemble the uwsgi launch command for the server container.
-
-    Returns a single shell-style string (uwsgi accepts repeated flags on its
-    own command line).
-    """
-    options: list[tuple[str, str | None]] = [
-        # HTTP front-end
-        ("http", f":{internal_port}"),
-        ("http-websockets", None),
-        ("http-chunked-input", None),
-        ("http-keepalive", None),
-        ("post-buffering", "0"),
-        # Reject any single chunked-input part larger than this. Sized well
-        # above ``HTTP_UPLOAD_CHUNK_SIZE`` so friendly clients have headroom;
-        # protects the server from hostile or buggy clients sending
-        # multi-gigabyte chunks.
-        ("chunked-input-limit", str(MAX_CHUNKED_INPUT_PART)),
-        # Concurrency model
-        ("gevent", "1000"),
-        # Process lifecycle and logging
-        ("master", None),
-        ("disable-logging", None),
-        # WSGI application entry point
-        ("callable", "app"),
-        ("wsgi-file", "/vantage6/vantage6-server/vantage6/server/wsgi.py"),
-        ("pyargv", config_file),
-    ]
-    parts = ["uwsgi"]
-    for flag, value in options:
-        parts.append(f"--{flag}" if value is None else f"--{flag} {value}")
-    return " ".join(parts)
 
 
 def _start_rabbitmq(

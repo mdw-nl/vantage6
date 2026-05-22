@@ -105,10 +105,15 @@ class TestFileStorageService(unittest.TestCase):
 
 
 class TestStorageAdapterFactory(unittest.TestCase):
+    def test_factory_returns_none_when_unset(self) -> None:
+        self.assertIsNone(build_storage_adapter({}))
+
     def test_factory_uses_env_var_for_base_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             with patch.dict(os.environ, {RUN_DATA_BASE_PATH_ENV_VAR: tmp}):
-                adapter = build_storage_adapter({"type": "file"})
+                adapter = build_storage_adapter(
+                    {"large_run_data_store": "filesystem"}
+                )
             self.assertIsInstance(adapter, FileStorageService)
             self.assertEqual(adapter.base_path, Path(tmp).resolve())
 
@@ -118,12 +123,28 @@ class TestStorageAdapterFactory(unittest.TestCase):
             with patch(
                 "vantage6.server.service.file_storage_service.Path.mkdir"
             ) as mock_mkdir:
-                adapter = build_storage_adapter({"type": "file"})
+                adapter = build_storage_adapter(
+                    {"large_run_data_store": "filesystem"}
+                )
         self.assertIsInstance(adapter, FileStorageService)
         self.assertEqual(
             adapter.base_path, Path(DEFAULT_RUN_DATA_BASE_PATH).resolve()
         )
         mock_mkdir.assert_called()
+
+    def test_factory_rejects_deprecated_large_result_store_key(self) -> None:
+        with self.assertRaises(ValueError) as cm:
+            build_storage_adapter({"large_result_store": {"type": "file"}})
+        self.assertIn("large_result_store", str(cm.exception))
+
+    def test_factory_rejects_unknown_store_type(self) -> None:
+        with self.assertRaises(ValueError):
+            build_storage_adapter({"large_run_data_store": "s3"})
+
+    def test_factory_rejects_azure_without_block(self) -> None:
+        with self.assertRaises(ValueError) as cm:
+            build_storage_adapter({"large_run_data_store": "azure"})
+        self.assertIn("azure_run_data_store", str(cm.exception))
 
 
 if __name__ == "__main__":

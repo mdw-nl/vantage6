@@ -22,7 +22,7 @@ def cleanup_runs_data(config: dict, include_input: bool = False):
         The number of days after which results should be cleared.
     """
     days = config.get("runs_data_cleanup_days")
-    storage_adapter = build_storage_adapter(config.get("large_result_store", {}))
+    storage_adapter = build_storage_adapter(config)
     threshold_date = datetime.now(timezone.utc) - timedelta(days=days)
     session = DatabaseSessionManager.get_session()
 

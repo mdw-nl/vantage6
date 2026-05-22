@@ -12,8 +12,9 @@ they are fully usable, so the listener is never registered against a
 half-initialised adapter.
 
 The module also exposes :func:`build_storage_adapter`, a small factory
-that dispatches on the ``type`` field of the ``large_result_store``
-configuration block.
+that dispatches on the top-level ``large_run_data_store`` setting (a
+string: ``"filesystem"`` or ``"azure"``). When ``"azure"`` is selected,
+the Azure-specific block lives under ``azure_run_data_store``.
 """
 
 import logging
@@ -94,29 +95,40 @@ class StorageAdapter(ABC):
             raise RuntimeError(error_msg)
 
 
-def build_storage_adapter(config: dict) -> StorageAdapter | None:
+def build_storage_adapter(server_config: dict) -> StorageAdapter | None:
     """Build the configured storage adapter, or return ``None`` if disabled.
 
-    Parameters
-    ----------
-    config : dict
-        The ``large_result_store`` configuration block.
+    Reads two top-level keys from the server config:
 
-    Returns
-    -------
-    StorageAdapter | None
-        Configured adapter, or ``None`` if the block is empty or the
-        ``type`` is unknown.
+    - ``large_run_data_store`` — required string, either ``"filesystem"``
+      or ``"azure"``. Absent means "disabled — use the relational DB
+      for inputs and results".
+    - ``azure_run_data_store`` — required when ``large_run_data_store``
+      is ``"azure"``; ignored otherwise.
+
+    Raises
+    ------
+    ValueError
+        If the deprecated ``large_result_store`` key is present (the
+        config shape changed in this release), if
+        ``large_run_data_store`` is not one of the supported values,
+        or if ``"azure"`` is selected without an
+        ``azure_run_data_store`` block.
     """
-    if not config:
+    if "large_result_store" in server_config:
+        raise ValueError(
+            "Configuration key 'large_result_store' is no longer supported. "
+            "Use top-level 'large_run_data_store: \"filesystem\"' or "
+            "'large_run_data_store: \"azure\"' (with an 'azure_run_data_store' "
+            "block for the Azure credentials). See the docs at "
+            "docs/features/inter-component/blob_storage.rst."
+        )
+
+    store_type = server_config.get("large_run_data_store")
+    if store_type is None:
         return None
 
-    store_type = config.get("type", "file")
-    if store_type == "azure":
-        from vantage6.server.service.azure_storage_service import AzureStorageService
-
-        return AzureStorageService(config=config)
-    if store_type == "file":
+    if store_type == "filesystem":
         from vantage6.server.service.file_storage_service import (
             DEFAULT_RUN_DATA_BASE_PATH,
             RUN_DATA_BASE_PATH_ENV_VAR,
@@ -126,10 +138,20 @@ def build_storage_adapter(config: dict) -> StorageAdapter | None:
         base_path = os.environ.get(
             RUN_DATA_BASE_PATH_ENV_VAR, DEFAULT_RUN_DATA_BASE_PATH
         )
-        return FileStorageService(config=config, base_path=base_path)
+        return FileStorageService(config={}, base_path=base_path)
 
-    log.error(
-        "Unknown large_result_store.type=%r; large result store disabled.",
-        store_type,
+    if store_type == "azure":
+        azure_config = server_config.get("azure_run_data_store")
+        if not azure_config:
+            raise ValueError(
+                "large_run_data_store is 'azure' but no 'azure_run_data_store' "
+                "block was provided in the server config."
+            )
+        from vantage6.server.service.azure_storage_service import AzureStorageService
+
+        return AzureStorageService(config=azure_config)
+
+    raise ValueError(
+        f"Unknown large_run_data_store={store_type!r}; expected "
+        f"'filesystem' or 'azure'."
     )
-    return None

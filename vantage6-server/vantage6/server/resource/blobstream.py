@@ -270,11 +270,14 @@ class BlobStream(BlobStreamBase):
                 data = request.get_data()
                 self.storage_adapter.store_run_data(result_uuid, data)
         except Exception as e:
-            # "unable to receive chunked part" is what uwsgi raises when a
-            # single chunked-input part exceeds ``--chunked-input-limit``.
-            # Storage adapters wrap the underlying IOError into RuntimeError
-            # but preserve the message, so we match on substring rather than
-            # type. Convert to a structured 413 so callers can self-diagnose.
+            # "unable to receive chunked part" is the error uwsgi raises
+            # *most commonly* when a single chunked-input part exceeds
+            # ``--chunked-input-limit``, but the same error string can come
+            # from other transport-level issues (client disconnects mid-part,
+            # malformed chunk framing, …). We surface a 413 because exceeding
+            # the limit is the dominant case and the only one the client can
+            # remediate on its own, but the message is intentionally vague:
+            # check the server logs for the underlying cause.
             if "unable to receive chunked part" in str(e).lower():
                 log.error(
                     "Chunked upload rejected for run data %s: %s (limit=%d bytes)",
@@ -284,9 +287,12 @@ class BlobStream(BlobStreamBase):
                 )
                 return {
                     "msg": (
-                        "Upload rejected: a single chunked-input part "
-                        f"exceeded the server limit of {MAX_CHUNKED_INPUT_PART} "
-                        "bytes. Reduce the per-chunk upload size."
+                        "Upload rejected while receiving a chunked-input "
+                        f"part. The server's per-part limit is "
+                        f"{MAX_CHUNKED_INPUT_PART} bytes — exceeding that "
+                        "is the most likely cause, but the same error can "
+                        "come from other transport-level issues; check the "
+                        "server logs to confirm."
                     ),
                     "max_chunked_input_part": MAX_CHUNKED_INPUT_PART,
                 }, HTTPStatus.REQUEST_ENTITY_TOO_LARGE
