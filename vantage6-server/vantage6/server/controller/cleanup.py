@@ -50,9 +50,9 @@ def cleanup_runs_data(config: dict, include_input: bool = False):
                     and run.blob_storage_used == True
                     and storage_adapter
                 ):
-                    log.debug(f"Deleting blob: {run.result}")
+                    log.debug(f"Deleting run data: {run.result}")
                     try:
-                        storage_adapter.delete_blob(run.result)
+                        storage_adapter.delete_run_data(run.result)
                     except Exception as e:
                         log.warning(f"Failed to delete result {run.result}: {e}")
                 run.result = ""
@@ -62,9 +62,9 @@ def cleanup_runs_data(config: dict, include_input: bool = False):
                         and run.blob_storage_used == True
                         and storage_adapter
                     ):
-                        log.debug(f"Deleting blob: {run.input}")
+                        log.debug(f"Deleting run data: {run.input}")
                         try:
-                            storage_adapter.delete_blob(run.input)
+                            storage_adapter.delete_run_data(run.input)
                         except Exception as e:
                             log.warning(f"Failed to delete input {run.input}: {e}")
                     run.input = ""

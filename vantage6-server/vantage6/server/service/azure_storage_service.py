@@ -66,81 +66,88 @@ class AzureStorageService(StorageAdapter):
         )
         super().__init__(config)
 
-    def get_blob(self, blob_name: str) -> bytes:
+    def get_run_data(self, name: str) -> bytes:
         """
-        Retrieve a blob from Azure Blob Storage by its name.
+        Retrieve a run-data entry from Azure Blob Storage by its name.
 
         Parameters
         ----------
-        blob_name : str
-            The name of the blob to retrieve.
+        name : str
+            The name of the run-data entry (Azure blob) to retrieve.
 
         Returns
         -------
         bytes
-            The content of the blob.
+            The content of the run-data entry.
         """
-        log.debug(f"Retrieving blob: {blob_name} from container: {self.container_name}")
+        log.debug(
+            f"Retrieving run data: {name} from container: {self.container_name}"
+        )
         blob_client = self.blob_service_client.get_blob_client(
-            container=self.container_name, blob=blob_name
+            container=self.container_name, blob=name
         )
         stream = blob_client.download_blob()
         return stream.readall()
 
-    def store_blob(self, blob_name: str, data: Union[IO, bytes]) -> None:
+    def store_run_data(self, name: str, data: Union[IO, bytes]) -> None:
         """
-        Store data as a blob in Azure Blob Storage.
+        Store data as a run-data entry in Azure Blob Storage.
 
         Parameters
         ----------
-        blob_name : str
-            The name of the blob to create or overwrite.
+        name : str
+            The name of the run-data entry (Azure blob) to create or
+            overwrite.
         data : Union[IO, bytes]
-            The data to store in the blob. Can be a bytes object or a file-like
+            The data to store. Can be a bytes object or a file-like
             object.
         """
-        log.debug(f"Storing blob: {blob_name} in container: {self.container_name}")
+        log.debug(f"Storing run data: {name} in container: {self.container_name}")
         blob_client = self.blob_service_client.get_blob_client(
-            container=self.container_name, blob=blob_name
+            container=self.container_name, blob=name
         )
         try:
             blob_client.upload_blob(data, overwrite=True)
         except Exception as e:
-            log.error(f"Failed to upload blob '{blob_name}': {e}")
-            raise RuntimeError(f"Failed to upload blob '{blob_name}': {e}")
+            log.error(f"Failed to upload run data '{name}': {e}")
+            raise RuntimeError(f"Failed to upload run data '{name}': {e}")
 
-    def delete_blob(self, blob_name: str) -> None:
+    def delete_run_data(self, name: str) -> None:
         """
-        Delete a blob from Azure Blob Storage by its name.
+        Delete a run-data entry from Azure Blob Storage by its name.
 
         Parameters
         ----------
-        blob_name : str
-            The name of the blob to delete.
+        name : str
+            The name of the run-data entry (Azure blob) to delete.
         """
-        log.debug(f"Deleting blob: {blob_name} from container: {self.container_name}")
+        log.debug(
+            f"Deleting run data: {name} from container: {self.container_name}"
+        )
         blob_client = self.blob_service_client.get_blob_client(
-            container=self.container_name, blob=blob_name
+            container=self.container_name, blob=name
         )
         blob_client.delete_blob()
 
-    def stream_blob(self, blob_name: str):
+    def stream_run_data(self, name: str):
         """
-        Stream a blob from Azure Blob Storage.
+        Stream a run-data entry from Azure Blob Storage.
         Returns a StorageStreamDownloader object.
 
         Parameters
         ----------
-        blob_name : str
-            The name of the blob to stream.
+        name : str
+            The name of the run-data entry (Azure blob) to stream.
 
         Returns
         -------
         StorageStreamDownloader
-            A stream object to read the blob's content in chunks.
+            A stream object to read the run-data entry's content in chunks.
         """
-        log.debug(f"Streaming blob: {blob_name} from container: {self.container_name}")
+        log.debug(
+            f"Streaming run data: {name} from container: {self.container_name}"
+        )
         blob_client = self.blob_service_client.get_blob_client(
-            container=self.container_name, blob=blob_name
+            container=self.container_name, blob=name
         )
         return blob_client.download_blob()

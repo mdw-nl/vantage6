@@ -62,7 +62,7 @@ REQUEST_TIMEOUT = 300
 # Default chunk size for streaming inputs and results
 DEFAULT_CHUNK_SIZE = 1024 * 1024  # 1MB
 
-# Wire-level chunk size for HTTP Transfer-Encoding: chunked uploads of blobs
+# Wire-level chunk size for HTTP Transfer-Encoding: chunked uploads of run data
 # and encrypted streams. Must stay well below ``MAX_CHUNKED_INPUT_PART`` —
 # a single chunk at or above the server-side limit makes
 # ``uwsgi.chunked_read`` raise ``IOError: unable to receive chunked part``.

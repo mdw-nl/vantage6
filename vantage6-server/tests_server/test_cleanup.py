@@ -54,9 +54,9 @@ class TestCleanupRunsIsolated(unittest.TestCase):
         self.assertIsNotNone(run.cleanup_at)
 
     @patch(
-        "vantage6.server.service.azure_storage_service.AzureStorageService.delete_blob"
+        "vantage6.server.service.azure_storage_service.AzureStorageService.delete_run_data"
     )
-    def test_cleanup_completed_old_blob(self, mock_delete_blob):
+    def test_cleanup_completed_old_run_data(self, mock_delete_run_data):
         task = Task(
             name="test-task",
             description="Test task for cleanup",
@@ -91,9 +91,9 @@ class TestCleanupRunsIsolated(unittest.TestCase):
         self.session.refresh(run)
 
         expected_calls = [call(self.uuid), call("input")]
-        mock_delete_blob.assert_has_calls(expected_calls, any_order=False)
+        mock_delete_run_data.assert_has_calls(expected_calls, any_order=False)
 
-    def test_cleanup_completed_old_blob_file_backend(self):
+    def test_cleanup_completed_old_run_data_file_backend(self):
         task = Task(
             name="test-task",
             description="Test task for cleanup",
@@ -119,8 +119,8 @@ class TestCleanupRunsIsolated(unittest.TestCase):
             from vantage6.server.service.file_storage_service import FileStorageService
 
             adapter = FileStorageService({"base_path": base_dir})
-            adapter.store_blob(result_uuid, b"result-bytes")
-            adapter.store_blob(input_uuid, b"input-bytes")
+            adapter.store_run_data(result_uuid, b"result-bytes")
+            adapter.store_run_data(input_uuid, b"input-bytes")
             result_path = Path(base_dir) / result_uuid[:2] / result_uuid
             input_path = Path(base_dir) / input_uuid[:2] / input_uuid
             assert result_path.is_file()

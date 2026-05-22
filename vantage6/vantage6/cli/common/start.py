@@ -282,15 +282,19 @@ def mount_database(
     return mount, environment_vars
 
 
-def mount_blob_storage(ctx: ServerContext) -> tuple[docker.types.Mount | None, dict]:
+def mount_run_data_storage(
+    ctx: ServerContext,
+) -> tuple[docker.types.Mount | None, dict]:
     """
-    Mount the on-disk blob store for the file-based large_result_store backend.
+    Mount the on-disk run-data store for the file-based large_result_store
+    backend.
 
     If ``large_result_store.type`` is ``"file"`` the host directory must be
-    bind-mounted into the server container, otherwise blobs would accumulate
-    inside the (ephemeral) container filesystem. To shield beginners from
-    forgetting to set this up, the helper auto-defaults ``base_path`` to a
-    subdirectory of ``ctx.data_dir`` if the user hasn't specified one.
+    bind-mounted into the server container, otherwise run data would
+    accumulate inside the (ephemeral) container filesystem. To shield
+    users from forgetting to set this up, the helper auto-defaults
+    ``base_path`` to a subdirectory of ``ctx.data_dir`` if the user
+    hasn't specified one.
 
     Parameters
     ----------
@@ -313,18 +317,18 @@ def mount_blob_storage(ctx: ServerContext) -> tuple[docker.types.Mount | None, d
     if base_path:
         host_path = os.path.abspath(os.path.expanduser(base_path))
     else:
-        host_path = str(ctx.data_dir / "blobs")
+        host_path = str(ctx.data_dir / "run_data")
         info(
             f"large_result_store.base_path not set; defaulting to {host_path} "
             "on host (auto-mounted into the server container)."
         )
 
     os.makedirs(host_path, exist_ok=True)
-    container_path = ServerMountPath.BLOB_STORAGE.value
-    info(f"Mounting blob storage host dir {host_path} -> {container_path}")
+    container_path = ServerMountPath.RUN_DATA_STORAGE.value
+    info(f"Mounting run data storage host dir {host_path} -> {container_path}")
 
     mount = docker.types.Mount(container_path, host_path, type="bind")
-    env = {ServerGlobals.BLOB_BASE_PATH_ENV_VAR.value: container_path}
+    env = {ServerGlobals.RUN_DATA_BASE_PATH_ENV_VAR.value: container_path}
     return mount, env
 
 

@@ -26,7 +26,7 @@ from vantage6.cli.common.start import (
     attach_logs,
     check_for_start,
     get_image,
-    mount_blob_storage,
+    mount_run_data_storage,
     mount_database,
     mount_source,
     pull_infra_image,
@@ -120,10 +120,12 @@ def cli_server_start(
     ]
 
     db_mount, environment_vars = mount_database(ctx, InstanceType.SERVER)
-    blob_mount, blob_env = mount_blob_storage(ctx)
+    run_data_mount, run_data_env = mount_run_data_storage(ctx)
 
-    mounts.extend(m for m in (mount_source(mount_src), db_mount, blob_mount) if m)
-    environment_vars = {**(environment_vars or {}), **blob_env}
+    mounts.extend(
+        m for m in (mount_source(mount_src), db_mount, run_data_mount) if m
+    )
+    environment_vars = {**(environment_vars or {}), **run_data_env}
 
     # Create a docker network for the server and other services like RabbitMQ
     # to reside in

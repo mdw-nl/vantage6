@@ -1,9 +1,10 @@
 """Abstract storage adapter for the large result store.
 
 Provides a backend-agnostic interface for storing run inputs and results
-(``store_blob`` / ``get_blob`` / ``stream_blob`` / ``delete_blob``) along
-with a shared SQLAlchemy ``after_delete`` listener on :class:`Run` that
-removes the associated blobs whenever a Run row is deleted.
+(``store_run_data`` / ``get_run_data`` / ``stream_run_data`` /
+``delete_run_data``) along with a shared SQLAlchemy ``after_delete``
+listener on :class:`Run` that removes the associated run data whenever
+a Run row is deleted.
 
 Concrete backends (Azure Blob Storage, local filesystem) subclass
 :class:`StorageAdapter` and call ``super().__init__(config)`` only after
@@ -28,8 +29,8 @@ module_name = logger_name(__name__)
 log = logging.getLogger(module_name)
 
 
-class BlobStream(ABC):
-    """Streaming reader for a stored blob.
+class RunDataStream(ABC):
+    """Streaming reader for stored run data.
 
     The shape mirrors Azure SDK's ``StorageStreamDownloader.chunks()`` so
     the existing call site in ``blobstream.py`` works unchanged for both
@@ -38,42 +39,44 @@ class BlobStream(ABC):
 
     @abstractmethod
     def chunks(self) -> Iterator[bytes]:
-        """Yield successive chunks of the blob's content."""
+        """Yield successive chunks of the run data's content."""
 
 
 class StorageAdapter(ABC):
     """Abstract base class for large-result storage backends."""
 
     def __init__(self, config: dict) -> None:
-        event.listen(Run, "after_delete", self._delete_blob_after_run_delete)
+        event.listen(Run, "after_delete", self._delete_run_data_after_run_delete)
 
     @abstractmethod
-    def get_blob(self, blob_name: str) -> bytes:
-        """Return the full content of a blob as bytes."""
+    def get_run_data(self, name: str) -> bytes:
+        """Return the full content of a run-data entry as bytes."""
 
     @abstractmethod
-    def store_blob(self, blob_name: str, data: Union[IO, bytes]) -> None:
-        """Store data under the given blob name."""
+    def store_run_data(self, name: str, data: Union[IO, bytes]) -> None:
+        """Store data under the given run-data name."""
 
     @abstractmethod
-    def delete_blob(self, blob_name: str) -> None:
-        """Delete a blob. Must be idempotent (no error if missing)."""
+    def delete_run_data(self, name: str) -> None:
+        """Delete a run-data entry. Must be idempotent (no error if missing)."""
 
     @abstractmethod
-    def stream_blob(self, blob_name: str):
+    def stream_run_data(self, name: str):
         """Return a streaming reader exposing a ``chunks()`` iterator."""
 
-    def _delete_blob_after_run_delete(self, mapper, connection, target) -> None:
-        """Remove the associated blobs when a Run row is deleted."""
+    def _delete_run_data_after_run_delete(
+        self, mapper, connection, target
+    ) -> None:
+        """Remove the associated run data when a Run row is deleted."""
         if not getattr(target, "blob_storage_used", False):
             return
         try:
             if target.result:
-                self.delete_blob(target.result)
+                self.delete_run_data(target.result)
             if target.input:
-                self.delete_blob(target.input)
+                self.delete_run_data(target.input)
         except Exception as e:
-            error_msg = f"Failed to delete blob for run {target.id}: {e}"
+            error_msg = f"Failed to delete run data for run {target.id}: {e}"
             log.error(error_msg)
             raise RuntimeError(error_msg)
 
