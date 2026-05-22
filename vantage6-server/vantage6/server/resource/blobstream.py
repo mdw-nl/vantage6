@@ -308,8 +308,7 @@ class UwsgiChunkedStream:
 
     Each call to ``uwsgi.chunked_read(timeout)`` returns the next HTTP
     chunk delivered by the client; the argument is a per-call timeout in
-    seconds (uwsgi defaults to 4). The amount returned is determined by
-    the client's chunk sizing — not by this argument.
+    seconds (uwsgi defaults to 4).
     """
 
     # TODO: Using uwsgi in python in combination with flask is not ideal.
