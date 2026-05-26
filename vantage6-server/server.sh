@@ -14,6 +14,7 @@ uwsgi \
     --gevent 1000 \
     --http-websockets \
     --http-chunked-input \
+    --chunked-input-limit $((16 * 1024 * 1024)) \
     --http-keepalive \
     --post-buffering 0 \
     --master --callable app --disable-logging \
