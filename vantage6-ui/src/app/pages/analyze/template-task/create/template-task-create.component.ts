@@ -233,7 +233,7 @@ export class TemplateTaskCreateComponent implements OnInit {
       image: this.algorithm?.image || '',
       collaboration_id: this.chosenCollaborationService.collaboration$.value?.id || -1,
       store_id: this.algorithm?.algorithm_store_id || -1,
-      server_url: environment.server_url,
+      server_url: `${environment.server_url}${environment.api_path}`,
       databases: taskDatabases,
       organizations: selectedOrganizations.map((organizationID) => {
         return { id: Number.parseInt(organizationID), input: btoa(JSON.stringify(input)) || '' };
