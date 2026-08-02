@@ -1,2 +1,2 @@
-# For MDW fork, for now, keeping changes GH actions to just me
-.github/** @lsago
+# For the MDW fork, we keep GitHub Actions changes with the current maintainers.
+.github/** @tim-hendriks @lsago
