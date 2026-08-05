@@ -15,6 +15,7 @@ from flask_restful import Api
 from http import HTTPStatus
 
 from vantage6.common import logger_name
+from vantage6.common.globals import MAX_CHUNKED_INPUT_PART
 from vantage6.common.task_status import has_task_finished
 from vantage6.server.permission import RuleCollection, Operation as P, Scope
 from vantage6.server.resource import (
@@ -23,6 +24,8 @@ from vantage6.server.resource import (
 )
 from vantage6.server.model import Run as db_Run, Task as db_Task
 
+
+_DEFAULT_CHUNKED_READ_TIMEOUT_S = 30
 
 module_name = logger_name(__name__)
 log = logging.getLogger(module_name)
@@ -96,7 +99,7 @@ class BlobStreamBase(ServicesResources):
 class BlobStreamStatus(BlobStreamBase):
     """
     Resource for /api/blobstream/status (GET)
-    Returns whether the blob store is enabled.
+    Returns whether the large result store is enabled.
     """
 
     def __init__(self, socketio, storage_adapter, mail, api, permissions, config):
@@ -104,11 +107,11 @@ class BlobStreamStatus(BlobStreamBase):
 
     @only_for(("node", "user", "container"))
     def get(self):
-        """Get the status of the blob store
+        """Get the status of the large result store
         ---
 
         description: >-
-            Returns whether or not blob storage is enabled. \n
+            Returns whether or not the large result store is enabled. \n
 
         responses:
           200:
@@ -119,7 +122,7 @@ class BlobStreamStatus(BlobStreamBase):
         security:
           - bearerAuth: []
         """
-        log.debug("Checking if blob store is enabled")
+        log.debug("Checking if large result store is enabled")
 
         if self.storage_adapter:
             return {"blob_store_enabled": True}, HTTPStatus.OK
@@ -130,7 +133,8 @@ class BlobStreamStatus(BlobStreamBase):
 class BlobStream(BlobStreamBase):
     """
     Resource for /api/blobstream/<id> (GET) and /api/blobstream (POST)
-    This resource allows for streaming large results from blob Storage.
+    This resource allows for streaming large run data (inputs and results)
+    from the configured large result store.
     """
 
     def __init__(self, socketio, storage_adapter, mail, api, permissions, config):
@@ -138,22 +142,23 @@ class BlobStream(BlobStreamBase):
 
     @only_for(("node", "user", "container"))
     def get(self, id):
-        """Stream the result or input with the given id from blob storage.
+        """Stream the result or input with the given id from the large result store.
         ---
 
         description: >-
-            Streams the result or input with the given id from blob storage.
+            Streams the result or input with the given id from the large
+            result store.
 
             ### Permission Table\n
             |Rule name|Scope|Operation|Assigned to node|Assigned to container|
             Description|\n
             |--|--|--|--|--|--|\n
-            |Blobstream|Global|View|❌|❌|View any blob|\n
-            |Blobstream|Collaboration|View|✅|✅|View the blobs of your
+            |Blobstream|Global|View|❌|❌|View any run data|\n
+            |Blobstream|Collaboration|View|✅|✅|View the run data of your
             organization's collaborations|\n
-            |Blobstream|Organization|View|❌|❌|View any blob from a task created by
+            |Blobstream|Organization|View|❌|❌|View any run data from a task created by
             your organization|\n
-            |Blobstream|Own|View|❌|❌|View any blob from a task created by you|\n
+            |Blobstream|Own|View|❌|❌|View any run data from a task created by you|\n
 
             Accessible to users.
 
@@ -185,18 +190,18 @@ class BlobStream(BlobStreamBase):
             }, HTTPStatus.UNAUTHORIZED
 
         if not self.storage_adapter:
-            not_available_msg = "The large result store is not set to blob storage, result streaming is not available."
+            not_available_msg = "The large result store is not configured, result streaming is not available."
             log.warning(not_available_msg)
             return {"msg": not_available_msg}, HTTPStatus.NOT_IMPLEMENTED
         try:
             log.debug(f"Streaming result for run id={id}")
-            blob_stream = self.storage_adapter.stream_blob(id)
+            data_stream = self.storage_adapter.stream_run_data(id)
         except Exception as e:
             log.error(f"Error streaming result: {e}")
             return {"msg": "Error streaming result!"}, HTTPStatus.INTERNAL_SERVER_ERROR
 
         def generate():
-            for chunk in blob_stream.chunks():
+            for chunk in data_stream.chunks():
                 yield chunk
 
         return Response(
@@ -207,12 +212,12 @@ class BlobStream(BlobStreamBase):
 
     @only_for(("node", "user", "container"))
     def post(self):
-        """Post a result to the blob storage.
-        blobs are streamed directly to the blob storage.
+        """Post a result to the large result store.
+        Run data is streamed directly to the large result store.
         This is useful for large results that cannot be loaded into memory at once.
         ---
         description: >-
-          Stream and store blob to blob storage.
+          Stream and store run data to the large result store.
 
         requestBody:
           content:
@@ -230,24 +235,24 @@ class BlobStream(BlobStreamBase):
         tags: ["Algorithm"]
         """
         if not self.storage_adapter:
-            not_available_msg = "The large result store is not set to blob storage, result streaming is not available."
+            not_available_msg = "The large result store is not configured, result streaming is not available."
             log.warning(not_available_msg)
             return {"msg": not_available_msg}, HTTPStatus.NOT_IMPLEMENTED
 
         if g.user and not self.r_task.has_at_least_scope(Scope.COLLABORATION, P.CREATE):
             return {
-                "msg": "You do not have permission to upload blobs. This requires permission to create tasks which you don't have."
+                "msg": "You do not have permission to upload run data. This requires permission to create tasks which you don't have."
             }, HTTPStatus.UNAUTHORIZED
         if g.container:
             container = g.container
             if has_task_finished(db_Task.get(container["task_id"]).status):
                 log.warning(
                     f"Container from node={container['node_id']} "
-                    f"attempts to upload blob for a sub-task of a completed "
+                    f"attempts to upload run data for a sub-task of a completed "
                     f"task={container['task_id']}"
                 )
                 return {
-                    "msg": "Cannot upload blob for a sub-task of a completed task."
+                    "msg": "Cannot upload run data for a sub-task of a completed task."
                 }, HTTPStatus.FORBIDDEN
 
         result_uuid = str(uuid.uuid4())
@@ -260,11 +265,37 @@ class BlobStream(BlobStreamBase):
             # to a different server might solve this issue.
             if is_chunked:
                 stream = UwsgiChunkedStream()
-                self.storage_adapter.store_blob(result_uuid, stream)
+                self.storage_adapter.store_run_data(result_uuid, stream)
             else:
                 data = request.get_data()
-                self.storage_adapter.store_blob(result_uuid, data)
+                self.storage_adapter.store_run_data(result_uuid, data)
         except Exception as e:
+            # "unable to receive chunked part" is the error uwsgi raises
+            # *most commonly* when a single chunked-input part exceeds
+            # ``--chunked-input-limit``, but the same error string can come
+            # from other transport-level issues (client disconnects mid-part,
+            # malformed chunk framing, …). Because we can't know which one
+            # we hit, the response is a generic 400 — a 413 would assert
+            # too much. The message and ``max_chunked_input_part`` field
+            # let the client try the per-part-limit hypothesis first.
+            if "unable to receive chunked part" in str(e).lower():
+                log.error(
+                    "Chunked upload rejected for run data %s: %s (limit=%d bytes)",
+                    result_uuid,
+                    e,
+                    MAX_CHUNKED_INPUT_PART,
+                )
+                return {
+                    "msg": (
+                        "Upload rejected while receiving a chunked-input "
+                        f"part. The server's per-part limit is "
+                        f"{MAX_CHUNKED_INPUT_PART} bytes — exceeding that "
+                        "is the most likely cause, but the same error can "
+                        "come from other transport-level issues; check the "
+                        "server logs to confirm."
+                    ),
+                    "max_chunked_input_part": MAX_CHUNKED_INPUT_PART,
+                }, HTTPStatus.BAD_REQUEST
             log.error(f"Error uploading result: {e}")
             return {"msg": "Error uploading result!"}, HTTPStatus.INTERNAL_SERVER_ERROR
 
@@ -273,17 +304,17 @@ class BlobStream(BlobStreamBase):
 
 class UwsgiChunkedStream:
     """
-    Read data in chunks from uwsgi.
+    File-like reader over a uwsgi chunked HTTP request body.
+
+    Each call to ``uwsgi.chunked_read(timeout)`` returns the next HTTP
+    chunk delivered by the client; the argument is a per-call timeout in
+    seconds (uwsgi defaults to 4).
     """
 
     # TODO: Using uwsgi in python in combination with flask is not ideal.
     # It would be better to switch to a different server in the long term.
-    #
-    def __init__(self, chunk_size=4096):
-        """
-        Initialize the UwsgiChunkedStream.
-        """
-        self.chunk_size = chunk_size
+    def __init__(self, read_timeout_seconds: int = _DEFAULT_CHUNKED_READ_TIMEOUT_S):
+        self.read_timeout_seconds = read_timeout_seconds
         self._buffer = b""
         self._eof = False
 
@@ -296,7 +327,7 @@ class UwsgiChunkedStream:
             chunks = [self._buffer]
             self._buffer = b""
             while not self._eof:
-                chunk = uwsgi.chunked_read(self.chunk_size)
+                chunk = uwsgi.chunked_read(self.read_timeout_seconds)
                 if not chunk:
                     self._eof = True
                     break
@@ -304,7 +335,7 @@ class UwsgiChunkedStream:
             return b"".join(chunks)
 
         while len(self._buffer) < size and not self._eof:
-            chunk = uwsgi.chunked_read(self.chunk_size)
+            chunk = uwsgi.chunked_read(self.read_timeout_seconds)
             if not chunk:
                 self._eof = True
                 break

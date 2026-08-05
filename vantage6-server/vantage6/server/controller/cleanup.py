@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from vantage6.common.task_status import TaskStatus
 from vantage6.server.model import Run
 from vantage6.server.model.base import DatabaseSessionManager
-from vantage6.server.service.azure_storage_service import AzureStorageService
+from vantage6.server.service.storage_adapter import build_storage_adapter
 
 module_name = __name__.split(".")[-1]
 log = logging.getLogger(module_name)
@@ -22,9 +22,7 @@ def cleanup_runs_data(config: dict, include_input: bool = False):
         The number of days after which results should be cleared.
     """
     days = config.get("runs_data_cleanup_days")
-    azure_config = config.get("large_result_store", {})
-    if azure_config:
-        storage_adapter = AzureStorageService(azure_config)
+    storage_adapter = build_storage_adapter(config)
     threshold_date = datetime.now(timezone.utc) - timedelta(days=days)
     session = DatabaseSessionManager.get_session()
 
@@ -52,9 +50,9 @@ def cleanup_runs_data(config: dict, include_input: bool = False):
                     and run.blob_storage_used == True
                     and storage_adapter
                 ):
-                    log.debug(f"Deleting blob: {run.result}")
+                    log.debug(f"Deleting run data: {run.result}")
                     try:
-                        storage_adapter.delete_blob(run.result)
+                        storage_adapter.delete_run_data(run.result)
                     except Exception as e:
                         log.warning(f"Failed to delete result {run.result}: {e}")
                 run.result = ""
@@ -64,9 +62,9 @@ def cleanup_runs_data(config: dict, include_input: bool = False):
                         and run.blob_storage_used == True
                         and storage_adapter
                     ):
-                        log.debug(f"Deleting blob: {run.input}")
+                        log.debug(f"Deleting run data: {run.input}")
                         try:
-                            storage_adapter.delete_blob(run.input)
+                            storage_adapter.delete_run_data(run.input)
                         except Exception as e:
                             log.warning(f"Failed to delete input {run.input}: {e}")
                     run.input = ""
