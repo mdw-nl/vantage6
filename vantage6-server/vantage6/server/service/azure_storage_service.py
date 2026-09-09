@@ -12,10 +12,32 @@ module_name = logger_name(__name__)
 log = logging.getLogger(module_name)
 
 
+def _delete_blob_after_run_delete(mapper, connection, target) -> None:
+    """
+    Forward a ``Run`` deletion to the active storage service.
+
+    Registered against the ``Run`` class exactly once, however many
+    services are constructed. When no service is active the deletion has
+    no stored data to clean up and this is a no-op.
+    """
+    service = AzureStorageService._active
+    if service is not None:
+        service.delete_blob_after_run_delete(mapper, connection, target)
+
+
 class AzureStorageService:
     """
     A service for managing Azure Blob Storage.
+
+    At most one instance per process is wired into the ``Run`` delete
+    cascade. ``_active`` holds that instance and ``_listener_registered``
+    records whether the class-level listener has been attached, so
+    constructing further instances replaces the target rather than adding
+    another listener.
     """
+
+    _active: "AzureStorageService | None" = None
+    _listener_registered: bool = False
 
     def __init__(self, config: dict):
         """
@@ -63,7 +85,23 @@ class AzureStorageService:
         self.container_client = self.blob_service_client.get_container_client(
             container_name
         )
-        event.listen(Run, "after_delete", self.delete_blob_after_run_delete)
+        self._become_active()
+
+    def _become_active(self) -> None:
+        """
+        Make this instance the target of the ``Run`` after_delete cascade.
+
+        ``event.listen`` targets the mapped ``Run`` class, which lives for
+        the whole process, and nothing removes what it registers. Binding a
+        listener per instance therefore accumulated one listener per
+        construction, and every one of them fired on every ``Run``
+        deletion. Register a single class-level listener instead, once, and
+        let it dispatch to whichever instance is current.
+        """
+        AzureStorageService._active = self
+        if not AzureStorageService._listener_registered:
+            event.listen(Run, "after_delete", _delete_blob_after_run_delete)
+            AzureStorageService._listener_registered = True
 
     def get_blob(self, blob_name: str) -> bytes:
         """
