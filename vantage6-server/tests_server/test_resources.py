@@ -638,6 +638,9 @@ class TestResources(unittest.TestCase):
         )
         self.assertEqual(send_email.call_count, 1)
 
+    @unittest.skipUnless(
+        hasattr(time, "tzset"), "time.tzset is unavailable on this platform"
+    )
     @patch("vantage6.backend.common.mail_service.MailService.send_email")
     def test_reset_password_throttle_holds_on_a_non_utc_server(self, send_email):
         """The throttle must not depend on the server's local timezone.
@@ -653,7 +656,9 @@ class TestResources(unittest.TestCase):
         config = {"smtp": {"email_from": "test@vantage6.ai"}}
 
         original_tz = os.environ.get("TZ")
-        os.environ["TZ"] = "Europe/Amsterdam"
+        # a DST-free zone whose offset (+9) is far larger than the 60-minute
+        # throttle window, so the shifted comparison fails unambiguously
+        os.environ["TZ"] = "Asia/Tokyo"
         time.tzset()
         try:
             _handle_password_recovery(
