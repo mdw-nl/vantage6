@@ -11,20 +11,29 @@ module_name = __name__.split(".")[-1]
 log = logging.getLogger(module_name)
 
 
-def cleanup_runs_data(config: dict, include_input: bool = False):
+def cleanup_runs_data(
+    config: dict,
+    storage_adapter: AzureStorageService | None = None,
+    include_input: bool = False,
+):
     """
     Clear the `result` and (optionally) `input` field for `Run` instances older
     than the specified number of days.
 
     Parameters
     ----------
-    days : int
-        The number of days after which results should be cleared.
+    config : dict
+        Server configuration.
+    storage_adapter : AzureStorageService | None
+        Service for the large result store, or None when it is not
+        configured. Supplied by the caller rather than built here: this
+        function runs on an hourly loop, and constructing a service per call
+        left behind an extra ``Run`` after_delete listener and an unreleased
+        Azure client every time.
+    include_input : bool
+        Whether to clear the `input` field as well as the `result` field.
     """
     days = config.get("runs_data_cleanup_days")
-    azure_config = config.get("large_result_store", {})
-    if azure_config:
-        storage_adapter = AzureStorageService(azure_config)
     threshold_date = datetime.now(timezone.utc) - timedelta(days=days)
     session = DatabaseSessionManager.get_session()
 
