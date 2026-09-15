@@ -91,10 +91,19 @@ class FileStorageService(StorageAdapter):
     """Filesystem-backed implementation of :class:`StorageAdapter`."""
 
     def __init__(self, config: dict, base_path: str | Path) -> None:
+        """Resolve and validate the storage root, then register the adapter.
+
+        An unwritable root (typically a read-only mount) fails here, at
+        startup, rather than as a 500 on the first upload: every write
+        would fail anyway, and at startup the operator is still looking.
+        """
         root = Path(base_path).expanduser().resolve()
         root.mkdir(parents=True, exist_ok=True)
         if not os.access(root, os.W_OK):
-            log.warning("File storage base path %s is not writable.", root)
+            raise RuntimeError(
+                f"File storage base path {root} is not writable. Check the "
+                "mount for the run-data store."
+            )
 
         self.base_path = root
         log.info("File storage adapter initialised at %s", self.base_path)

@@ -121,6 +121,21 @@ class TestFileStorageService(unittest.TestCase):
         adapter = FileStorageService({}, base_path=self.tmp_path)
         self.assertEqual(adapter.base_path, self.tmp_path.resolve())
 
+    @unittest.skipUnless(
+        os.name == "posix" and os.geteuid() != 0,
+        "needs POSIX permissions and a non-root user (root bypasses mode bits)",
+    )
+    def test_unwritable_base_path_fails_at_startup(self) -> None:
+        """A read-only storage root (unmounted or misconfigured volume)
+        must fail when the adapter is built, not as a 500 on first upload."""
+        read_only = self.tmp_path / "read-only-root"
+        read_only.mkdir(mode=0o500)
+        try:
+            with self.assertRaises(RuntimeError):
+                FileStorageService({}, base_path=read_only)
+        finally:
+            read_only.chmod(0o700)
+
     def test_stream_missing_run_data_raises(self) -> None:
         with self.assertRaises(RunDataNotFoundError):
             self.adapter.stream_run_data(_uuid())
@@ -269,7 +284,15 @@ class TestStorageAdapterFactory(unittest.TestCase):
             with patch(
                 "vantage6.server.service.file_storage_service.Path.mkdir"
             ) as mock_mkdir:
-                adapter = build_storage_adapter({"large_run_data_store": "filesystem"})
+                # The default path does not exist on the test host; the
+                # writability gate is exercised by its own test above.
+                with patch(
+                    "vantage6.server.service.file_storage_service.os.access",
+                    return_value=True,
+                ):
+                    adapter = build_storage_adapter(
+                        {"large_run_data_store": "filesystem"}
+                    )
         self.assertIsInstance(adapter, FileStorageService)
         self.assertEqual(adapter.base_path, Path(DEFAULT_RUN_DATA_BASE_PATH).resolve())
         mock_mkdir.assert_called()

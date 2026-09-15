@@ -26,7 +26,6 @@ from vantage6.server.model import Run as db_Run, Task as db_Task
 from vantage6.server.service.storage_adapter import RunDataNotFoundError
 
 _DEFAULT_CHUNKED_READ_TIMEOUT_S = 30
-
 module_name = logger_name(__name__)
 log = logging.getLogger(module_name)
 
@@ -198,9 +197,7 @@ class BlobStream(BlobStreamBase):
             data_stream = self.storage_adapter.stream_run_data(id)
         except RunDataNotFoundError:
             log.warning(f"No run data stored for id={id}")
-            return {
-                "msg": f"No run data stored for id={id}"
-            }, HTTPStatus.NOT_FOUND
+            return {"msg": f"No run data stored for id={id}"}, HTTPStatus.NOT_FOUND
         except Exception as e:
             log.error(f"Error streaming result: {e}")
             return {"msg": "Error streaming result!"}, HTTPStatus.INTERNAL_SERVER_ERROR

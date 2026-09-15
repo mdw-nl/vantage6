@@ -206,17 +206,22 @@ class ServerApp:
         If configured, inputs and results will be stored in the selected
         backend (Azure Blob Storage or local filesystem); otherwise the
         relational database is used.
+
+        The factory is always consulted, even when no store is configured:
+        it is what rejects the deprecated ``large_result_store`` key, and
+        skipping it would let a server with the old config shape start
+        silently without the store it used to have.
         """
-        store_type = self.ctx.config.get("large_run_data_store")
-        if store_type is None:
+        self.storage_adapter = build_storage_adapter(self.ctx.config)
+        if self.storage_adapter is None:
             log.info(
                 "No large run-data store configured, using relational database for input and result storage"
             )
-            self.storage_adapter = None
-            return
-
-        log.info("Using %r backend as large run-data store", store_type)
-        self.storage_adapter = build_storage_adapter(self.ctx.config)
+        else:
+            log.info(
+                "Using %r backend as large run-data store",
+                self.ctx.config.get("large_run_data_store"),
+            )
 
     @staticmethod
     def _warn_if_cors_regex(origins: str | list[str]) -> None:
