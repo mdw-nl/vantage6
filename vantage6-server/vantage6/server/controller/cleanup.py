@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from vantage6.common.task_status import TaskStatus
 from vantage6.server.model import Run
 from vantage6.server.model.base import DatabaseSessionManager
-from vantage6.server.service.azure_storage_service import AzureStorageService
+from vantage6.server.service.storage_adapter import StorageAdapter
 
 module_name = __name__.split(".")[-1]
 log = logging.getLogger(module_name)
@@ -13,7 +13,7 @@ log = logging.getLogger(module_name)
 
 def cleanup_runs_data(
     config: dict,
-    storage_adapter: AzureStorageService | None = None,
+    storage_adapter: StorageAdapter | None = None,
     include_input: bool = False,
 ):
     """
@@ -24,12 +24,11 @@ def cleanup_runs_data(
     ----------
     config : dict
         Server configuration.
-    storage_adapter : AzureStorageService | None
-        Service for the large result store, or None when it is not
+    storage_adapter : StorageAdapter | None
+        Adapter for the large run-data store, or None when it is not
         configured. Supplied by the caller rather than built here: this
-        function runs on an hourly loop, and constructing a service per call
-        left behind an extra ``Run`` after_delete listener and an unreleased
-        Azure client every time.
+        function runs on an hourly loop, and constructing an adapter per
+        call would leave behind an extra backend client every time.
     include_input : bool
         Whether to clear the `input` field as well as the `result` field.
     """
@@ -61,9 +60,9 @@ def cleanup_runs_data(
                     and run.blob_storage_used == True
                     and storage_adapter
                 ):
-                    log.debug(f"Deleting blob: {run.result}")
+                    log.debug(f"Deleting run data: {run.result}")
                     try:
-                        storage_adapter.delete_blob(run.result)
+                        storage_adapter.delete_run_data(run.result)
                     except Exception as e:
                         log.warning(f"Failed to delete result {run.result}: {e}")
                 run.result = ""
@@ -73,9 +72,9 @@ def cleanup_runs_data(
                         and run.blob_storage_used == True
                         and storage_adapter
                     ):
-                        log.debug(f"Deleting blob: {run.input}")
+                        log.debug(f"Deleting run data: {run.input}")
                         try:
-                            storage_adapter.delete_blob(run.input)
+                            storage_adapter.delete_run_data(run.input)
                         except Exception as e:
                             log.warning(f"Failed to delete input {run.input}: {e}")
                     run.input = ""

@@ -1,43 +1,26 @@
+"""Azure Blob Storage backend for the large result store."""
+
 import logging
 from typing import IO, Union
 
+from azure.core.exceptions import ResourceNotFoundError
 from azure.identity import ClientSecretCredential
 from azure.storage.blob import BlobServiceClient
-from sqlalchemy import event
 
 from vantage6.common import logger_name
-from vantage6.server.model.run import Run
+from vantage6.server.service.storage_adapter import (
+    RunDataNotFoundError,
+    StorageAdapter,
+)
 
 module_name = logger_name(__name__)
 log = logging.getLogger(module_name)
 
 
-def _delete_blob_after_run_delete(mapper, connection, target) -> None:
-    """
-    Forward a ``Run`` deletion to the active storage service.
-
-    Registered against the ``Run`` class exactly once, however many
-    services are constructed. When no service is active the deletion has
-    no stored data to clean up and this is a no-op.
-    """
-    service = AzureStorageService._active
-    if service is not None:
-        service.delete_blob_after_run_delete(mapper, connection, target)
-
-
-class AzureStorageService:
+class AzureStorageService(StorageAdapter):
     """
     A service for managing Azure Blob Storage.
-
-    At most one instance per process is wired into the ``Run`` delete
-    cascade. ``_active`` holds that instance and ``_listener_registered``
-    records whether the class-level listener has been attached, so
-    constructing further instances replaces the target rather than adding
-    another listener.
     """
-
-    _active: "AzureStorageService | None" = None
-    _listener_registered: bool = False
 
     def __init__(self, config: dict):
         """
@@ -85,115 +68,96 @@ class AzureStorageService:
         self.container_client = self.blob_service_client.get_container_client(
             container_name
         )
-        self._become_active()
+        super().__init__(config)
 
-    def _become_active(self) -> None:
+    def get_run_data(self, name: str) -> bytes:
         """
-        Make this instance the target of the ``Run`` after_delete cascade.
-
-        ``event.listen`` targets the mapped ``Run`` class, which lives for
-        the whole process, and nothing removes what it registers. Binding a
-        listener per instance therefore accumulated one listener per
-        construction, and every one of them fired on every ``Run``
-        deletion. Register a single class-level listener instead, once, and
-        let it dispatch to whichever instance is current.
-        """
-        AzureStorageService._active = self
-        if not AzureStorageService._listener_registered:
-            event.listen(Run, "after_delete", _delete_blob_after_run_delete)
-            AzureStorageService._listener_registered = True
-
-    def get_blob(self, blob_name: str) -> bytes:
-        """
-        Retrieve a blob from Azure Blob Storage by its name.
+        Retrieve a run-data entry from Azure Blob Storage by its name.
 
         Parameters
         ----------
-        blob_name : str
-            The name of the blob to retrieve.
+        name : str
+            The name of the run-data entry (Azure blob) to retrieve.
 
         Returns
         -------
         bytes
-            The content of the blob.
+            The content of the run-data entry.
         """
-        log.debug(f"Retrieving blob: {blob_name} from container: {self.container_name}")
+        log.debug(f"Retrieving run data: {name} from container: {self.container_name}")
         blob_client = self.blob_service_client.get_blob_client(
-            container=self.container_name, blob=blob_name
+            container=self.container_name, blob=name
         )
-        stream = blob_client.download_blob()
-        return stream.readall()
+        try:
+            stream = blob_client.download_blob()
+            return stream.readall()
+        except ResourceNotFoundError as e:
+            raise RunDataNotFoundError(f"Run data {name!r} not found") from e
 
-    def store_blob(self, blob_name: str, data: Union[IO, bytes]) -> None:
+    def store_run_data(self, name: str, data: Union[IO, bytes]) -> None:
         """
-        Store data as a blob in Azure Blob Storage.
+        Store data as a run-data entry in Azure Blob Storage.
 
         Parameters
         ----------
-        blob_name : str
-            The name of the blob to create or overwrite.
+        name : str
+            The name of the run-data entry (Azure blob) to create or
+            overwrite.
         data : Union[IO, bytes]
-            The data to store in the blob. Can be a bytes object or a file-like
+            The data to store. Can be a bytes object or a file-like
             object.
         """
-        log.debug(f"Storing blob: {blob_name} in container: {self.container_name}")
+        log.debug(f"Storing run data: {name} in container: {self.container_name}")
         blob_client = self.blob_service_client.get_blob_client(
-            container=self.container_name, blob=blob_name
+            container=self.container_name, blob=name
         )
         try:
             blob_client.upload_blob(data, overwrite=True)
         except Exception as e:
-            log.error(f"Failed to upload blob '{blob_name}': {e}")
-            raise RuntimeError(f"Failed to upload blob '{blob_name}': {e}")
+            log.error(f"Failed to upload run data '{name}': {e}")
+            raise RuntimeError(f"Failed to upload run data '{name}': {e}")
 
-    def delete_blob(self, blob_name: str) -> None:
+    def delete_run_data(self, name: str) -> None:
         """
-        Delete a blob from Azure Blob Storage by its name.
+        Delete a run-data entry from Azure Blob Storage by its name.
 
         Parameters
         ----------
-        blob_name : str
-            The name of the blob to delete.
+        name : str
+            The name of the run-data entry (Azure blob) to delete.
         """
-        log.debug(f"Deleting blob: {blob_name} from container: {self.container_name}")
+        log.debug(f"Deleting run data: {name} from container: {self.container_name}")
         blob_client = self.blob_service_client.get_blob_client(
-            container=self.container_name, blob=blob_name
+            container=self.container_name, blob=name
         )
-        blob_client.delete_blob()
+        try:
+            blob_client.delete_blob()
+        except ResourceNotFoundError:
+            # StorageAdapter.delete_run_data is contractually idempotent;
+            # the after_delete listener relies on this when a Run row whose
+            # blob has already been deleted is removed from the DB.
+            pass
 
-    def stream_blob(self, blob_name: str):
+    def stream_run_data(self, name: str):
         """
-        Stream a blob from Azure Blob Storage.
+        Stream a run-data entry from Azure Blob Storage.
         Returns a StorageStreamDownloader object.
 
         Parameters
         ----------
-        blob_name : str
-            The name of the blob to stream.
+        name : str
+            The name of the run-data entry (Azure blob) to stream.
 
         Returns
         -------
         StorageStreamDownloader
-            A stream object to read the blob's content in chunks.
+            A stream object to read the run-data entry's content in chunks.
         """
-        log.debug(f"Streaming blob: {blob_name} from container: {self.container_name}")
+        log.debug(f"Streaming run data: {name} from container: {self.container_name}")
         blob_client = self.blob_service_client.get_blob_client(
-            container=self.container_name, blob=blob_name
+            container=self.container_name, blob=name
         )
-        return blob_client.download_blob()
-
-    def delete_blob_after_run_delete(self, mapper, connection, target):
-        """
-        SQLAlchemy event listener to delete the associated blob when a Run
-        instance is deleted.
-        """
-        if target.blob_storage_used:
-            try:
-                if target.result:
-                    self.delete_blob(target.result)
-                if target.input:
-                    self.delete_blob(target.input)
-            except Exception as e:
-                error_msg = f"Failed to delete blob for run {target.id}: {e}"
-                log.error(error_msg)
-                raise RuntimeError(error_msg)
+        try:
+            return blob_client.download_blob()
+        except ResourceNotFoundError as e:
+            raise RunDataNotFoundError(f"Run data {name!r} not found") from e
