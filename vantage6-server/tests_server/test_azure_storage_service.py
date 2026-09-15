@@ -1,4 +1,4 @@
-"""Tests for the Run delete cascade wiring of the Azure storage service."""
+"""Tests for the Run delete cascade wiring of the Azure storage adapter."""
 
 import unittest
 from unittest.mock import patch
@@ -7,13 +7,13 @@ from sqlalchemy import inspect
 
 from vantage6.server.model.base import Database
 from vantage6.server.model.run import Run
-from vantage6.server.service.azure_storage_service import (
-    AzureStorageService,
-    _delete_blob_after_run_delete,
+from vantage6.server.service.azure_storage_service import AzureStorageService
+from vantage6.server.service.storage_adapter import (
+    StorageAdapter,
+    _dispatch_run_data_delete_after_run_delete,
 )
 
 AZURE_CONFIG = {
-    "type": "azure",
     "container_name": "test-container",
     "connection_string": (
         "DefaultEndpointsProtocol=https;AccountName=dummyname;AccountKey=dummykey"
@@ -27,11 +27,11 @@ def _after_delete_listener_count() -> int:
 
 
 class TestRunDeleteCascadeRegistration(unittest.TestCase):
-    """The cascade must not grow as storage services are constructed.
+    """The cascade must not grow as storage adapters are constructed.
 
     ``event.listen`` targets the mapped ``Run`` class, which outlives any
-    single service, so a listener registered per instance is never released.
-    The server builds one service at startup and the run-data cleanup worker
+    single adapter, so a listener registered per instance is never released.
+    The server builds one adapter at startup and the run-data cleanup worker
     used to build another on every hourly pass, which meant the cascade grew
     for as long as the process ran.
     """
@@ -58,15 +58,15 @@ class TestRunDeleteCascadeRegistration(unittest.TestCase):
 
         self.assertEqual(_after_delete_listener_count(), before)
 
-    def test_cascade_reaches_the_most_recent_service(self) -> None:
+    def test_cascade_reaches_the_most_recent_adapter(self) -> None:
         AzureStorageService(AZURE_CONFIG)
         latest = AzureStorageService(AZURE_CONFIG)
 
-        with patch.object(latest, "delete_blob_after_run_delete") as handler:
-            _delete_blob_after_run_delete(None, None, None)
+        with patch.object(latest, "_delete_run_data_after_run_delete") as handler:
+            _dispatch_run_data_delete_after_run_delete(None, None, None)
 
         handler.assert_called_once_with(None, None, None)
 
-    def test_dispatch_is_a_noop_without_a_service(self) -> None:
-        with patch.object(AzureStorageService, "_active", None):
-            _delete_blob_after_run_delete(None, None, None)
+    def test_dispatch_is_a_noop_without_an_adapter(self) -> None:
+        with patch.object(StorageAdapter, "_active", None):
+            _dispatch_run_data_delete_after_run_delete(None, None, None)
