@@ -61,7 +61,10 @@ setup(
             "coverage==6.4.4",
             "black",
             "pre-commit",
-        ]
+        ],
+        "postgres": [
+            "psycopg2-binary==2.9.10",
+        ],
     },
     package_data={
         "vantage6.server": [
