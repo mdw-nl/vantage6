@@ -59,5 +59,8 @@ RUN pip install \
     && pip install /dist/uwsgi-*.whl \
     && rm -rf /dist
 
-# server.sh starts uWSGI on port 80.
+# server.sh starts uWSGI on port 80. Upstream tracks the script without the executable bit,
+# so set it here rather than trust the mode the checkout happens to have.
+RUN chmod +x /vantage6/vantage6-server/server.sh
+
 EXPOSE 80
